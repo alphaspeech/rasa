@@ -59,6 +59,9 @@ class RestInput(InputChannel):
     def _extract_message(self, req: Request) -> Optional[Text]:
         return req.json.get("message", None)
 
+    def _extract_is_final(self, req: Request) -> Optional[Text]:
+        return req.json.get("is_final", True)
+
     def _extract_input_channel(self, req: Request) -> Text:
         return req.json.get("input_channel") or self.name()
 
@@ -142,6 +145,7 @@ class RestInput(InputChannel):
         async def receive(request: Request) -> Union[ResponseStream, HTTPResponse]:
             sender_id = await self._extract_sender(request)
             text = self._extract_message(request)
+            is_final = self._extract_is_final(request)
             should_use_stream = rasa.utils.endpoints.bool_arg(
                 request, "stream", default=False
             )
@@ -164,6 +168,7 @@ class RestInput(InputChannel):
                             text,
                             collector,
                             sender_id,
+                            is_final=is_final,
                             input_channel=input_channel,
                             metadata=metadata,
                             headers=request.headers,

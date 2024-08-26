@@ -17,6 +17,7 @@ from rasa.core.actions.action import (
     ActionDefaultAskAffirmation,
     ActionDefaultAskRephrase,
     ActionDefaultFallback,
+    ActionDefaultUtteranceRejection,
     ActionExecutionRejection,
     ActionRestart,
     ActionBotResponse,
@@ -964,6 +965,17 @@ async def test_action_default_fallback(
             "sorry, I didn't get that, can you rephrase it?",
             metadata={"utter_action": "utter_default"},
         ),
+        UserUtteranceReverted(),
+    ]
+
+async def test_action_default_utterance_rejection(
+    default_channel, default_nlg, default_tracker, domain: Domain
+):
+    events = await ActionDefaultUtteranceRejection().run(
+        default_channel, default_nlg, default_tracker, domain
+    )
+
+    assert events == [
         UserUtteranceReverted(),
     ]
 

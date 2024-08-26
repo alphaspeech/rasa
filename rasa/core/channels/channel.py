@@ -40,6 +40,7 @@ class UserMessage:
         text: Optional[Text] = None,
         output_channel: Optional["OutputChannel"] = None,
         sender_id: Optional[Text] = None,
+        is_final: Optional[bool] = True,
         parse_data: Optional[Dict[Text, Any]] = None,
         input_channel: Optional[Text] = None,
         message_id: Optional[Text] = None,
@@ -60,6 +61,8 @@ class UserMessage:
 
         """
         self.text = text.strip() if text else text
+
+        self.is_final = is_final
 
         if message_id is not None:
             self.message_id = str(message_id)
@@ -341,6 +344,7 @@ class CollectingOutputChannel(OutputChannel):
     def _message(
         recipient_id: Text,
         text: Optional[Text] = None,
+        is_tracked: Optional[bool] = True,
         image: Optional[Text] = None,
         buttons: Optional[List[Dict[Text, Any]]] = None,
         attachment: Optional[Text] = None,
@@ -350,6 +354,7 @@ class CollectingOutputChannel(OutputChannel):
         obj = {
             "recipient_id": recipient_id,
             "text": text,
+            "is_tracked": is_tracked,
             "image": image,
             "buttons": buttons,
             "attachment": attachment,

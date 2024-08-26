@@ -35,13 +35,15 @@ class RasaNLUHttpInterpreter:
             "intent": {INTENT_NAME_KEY: "", "confidence": 0.0},
             "entities": [],
             "text": "",
+            "is_final": None
         }
+        logging.info(f"parsing msg with is_final: {message.is_final}")
 
-        result = await self._rasa_http_parse(message.text, message.sender_id)
+        result = await self._rasa_http_parse(message.text, message.sender_id, is_final=message.is_final)
         return result if result is not None else default_return
 
     async def _rasa_http_parse(
-        self, text: Text, message_id: Optional[Text] = None
+        self, text: Text, message_id: Optional[Text] = None, is_final: bool = None
     ) -> Optional[Dict[Text, Any]]:
         """Send a text message to a running rasa NLU http server.
 
@@ -59,6 +61,7 @@ class RasaNLUHttpInterpreter:
             "token": self.endpoint_config.token,
             "text": text,
             "message_id": message_id,
+            "is_final": is_final
         }
 
         if self.endpoint_config.url.endswith("/"):

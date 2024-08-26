@@ -99,6 +99,7 @@ from rasa.shared.nlu.constants import (
     INTENT_RESPONSE_KEY,
     INTENT_NAME_KEY,
     PREDICTED_CONFIDENCE_KEY,
+    REQUIRE_ENTITIES_KEY,
 )
 
 from rasa.utils.tensorflow.model_data import RasaModelData
@@ -530,6 +531,7 @@ class ResponseSelector(DIETClassifier):
         for message in messages:
             out = self._predict(message)
             top_label, label_ranking = self._predict_label(out)
+            logging.info(f"Top Label: {top_label}")
 
             # Get the exact intent_response_key and the associated
             # responses for the top predicted label
@@ -583,7 +585,7 @@ class ResponseSelector(DIETClassifier):
                 },
                 RESPONSE_SELECTOR_RANKING_KEY: label_ranking,
             }
-
+            logging.info(f"prediction_dict: {prediction_dict}")
             self._set_message_property(message, prediction_dict, selector_key)
 
             if (
@@ -594,6 +596,8 @@ class ResponseSelector(DIETClassifier):
                 message.add_diagnostic_data(
                     self._execution_context.node_name, out.get(DIAGNOSTIC_DATA)
                 )
+
+        logging.info(f"**** FOUND FIRST INSTANCE OF PREDICTION APPLIED: {messages[0].as_dict()[INTENT]}")
 
         return messages
 

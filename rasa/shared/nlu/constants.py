@@ -14,6 +14,7 @@ METADATA_INTENT = "intent"
 METADATA_EXAMPLE = "example"
 METADATA_MODEL_ID = "model_id"
 INTENT_RANKING_KEY = "intent_ranking"
+REQUIRE_ENTITIES_KEY = "require_entities"
 PREDICTED_CONFIDENCE_KEY = "confidence"
 
 RESPONSE_IDENTIFIER_DELIMITER = "/"

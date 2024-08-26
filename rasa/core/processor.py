@@ -1,4 +1,3 @@
-import inspect
 import copy
 import logging
 import structlog
@@ -55,6 +54,7 @@ from rasa.shared.constants import (
     DEFAULT_SENDER_ID,
     DOCS_URL_POLICIES,
     UTTER_PREFIX,
+    DEFAULT_UTTERANCE_REJECTION_INTENT_NAME
 )
 from rasa.core.nlg import NaturalLanguageGenerator
 from rasa.core.lock_store import LockStore
@@ -72,6 +72,7 @@ from rasa.shared.nlu.constants import (
     INTENT_NAME_KEY,
     PREDICTED_CONFIDENCE_KEY,
     TEXT,
+    REQUIRE_ENTITIES_KEY
 )
 from rasa.shared.nlu.training_data.message import Message
 from rasa.utils.endpoints import EndpointConfig
@@ -154,8 +155,16 @@ class MessageProcessor:
         self, message: UserMessage
     ) -> Optional[List[Dict[Text, Any]]]:
         """Handle a single message with this processor."""
+        logging.info("handle_message in processor.py has been called")
         # preprocess message if necessary
         tracker = await self.log_message(message, should_save_tracker=False)
+
+        logging.info(self.domain.required_entities_for_intent("travel_data_travel_departure_date"))
+
+        # TODO: here message.parse_data["is_final"] contains the utterance detection result and we can use it to do whatever the fuck we waaant
+        logging.info("CHECK IF MSG DATA UPDATED")
+        # TODO: move this earlier so that its there before URC is processing
+        logging.info(message.parse_data)
 
         if self.model_metadata.training_type == TrainingType.NLU:
             await self.save_tracker(tracker)
@@ -167,6 +176,7 @@ class MessageProcessor:
 
         tracker = await self.run_action_extract_slots(message.output_channel, tracker)
 
+        logging.info("gonna run the prediciton loop now woopdy")
         await self._run_prediction_loop(message.output_channel, tracker)
 
         await self.run_anonymization_pipeline(tracker)
@@ -342,7 +352,7 @@ class MessageProcessor:
               Tracker for `sender_id`.
         """
         tracker = await self.get_tracker(sender_id)
-
+        logging.info(f"Updating tracker session in 351 processor.py")
         await self._update_tracker_session(tracker, output_channel, metadata)
 
         return tracker
@@ -460,6 +470,7 @@ class MessageProcessor:
         can be skipped if the tracker returned by this method is used for further
         processing and saved at a later stage.
         """
+        logging.info(f"Message at the start of log_message: {message.parse_data}")
         tracker = await self.fetch_tracker_and_update_session(
             message.sender_id, message.output_channel, message.metadata
         )
@@ -468,7 +479,7 @@ class MessageProcessor:
 
         if should_save_tracker:
             await self.save_tracker(tracker)
-
+        logging.info(f"Message at the end of log_message: {message.parse_data}")
         return tracker
 
     async def execute_action(
@@ -524,6 +535,7 @@ class MessageProcessor:
         should_predict_another_action = self.should_predict_another_action(
             tracker.latest_action_name
         )
+        logging.info(f"\t should_predict_another_action is {should_predict_another_action} and latest action is {tracker.latest_action_name}")
 
         if self.is_action_limit_reached(tracker, should_predict_another_action):
             raise ActionLimitReached(
@@ -616,6 +628,7 @@ class MessageProcessor:
             tracker: The tracker to which the event should be added.
             output_channel: The output channel.
         """
+        logging.info("_run_prediction_loop from trigger_external_user_uttered")
         if isinstance(entities, list):
             entity_list = entities
         elif isinstance(entities, dict):
@@ -776,20 +789,25 @@ class MessageProcessor:
             TEXT: "",
             INTENT: {INTENT_NAME_KEY: None, PREDICTED_CONFIDENCE_KEY: 0.0},
             ENTITIES: [],
+            #"is_final": message.is_final
         }
         parse_data.update(
             parsed_message.as_dict(only_output_properties=only_output_properties)
         )
+        parse_data[INTENT][REQUIRE_ENTITIES_KEY] = self.domain.required_entities_for_intent(parse_data[INTENT][INTENT_NAME_KEY]) # TODO: This didnt work i think, remove?
+        logging.info(f"_parse_message_with_graph: {parse_data}")
         return parse_data
 
     async def _handle_message_with_tracker(
         self, message: UserMessage, tracker: DialogueStateTracker
     ) -> None:
 
-        if message.parse_data:
-            parse_data = message.parse_data
-        else:
-            parse_data = await self.parse_message(message, tracker)
+        logging.info(f"messege parse data upon handle message with tracker call: {message.parse_data}")
+        if not message.parse_data:
+            message.parse_data = await self.parse_message(message, tracker)
+            logging.info(f"messege parse data after pare_message: {message.parse_data}")
+        parse_data = message.parse_data
+        logging.info(f"parse data in _handle_message_with_tracker: {parse_data}")
 
         # don't ever directly mutate the tracker
         # - instead pass its events to log
@@ -805,9 +823,10 @@ class MessageProcessor:
             ),
             self.domain,
         )
-
+        logging.info(f"tracker updated")
         if parse_data["entities"]:
             self._log_slots(tracker)
+            logging.info(f"slots logged")
 
         logger.debug(
             f"Logged UserUtterance - tracker now has {len(tracker.events)} events."
@@ -815,6 +834,7 @@ class MessageProcessor:
 
     @staticmethod
     def _should_handle_message(tracker: DialogueStateTracker) -> bool:
+        logging.info(f"Intent in latest Message was: {tracker.latest_message.intent.get(INTENT_NAME_KEY)}")
         return not tracker.is_paused() or (
             tracker.latest_message is not None
             and tracker.latest_message.intent.get(INTENT_NAME_KEY)
@@ -851,6 +871,7 @@ class MessageProcessor:
     async def _run_prediction_loop(
         self, output_channel: OutputChannel, tracker: DialogueStateTracker
     ) -> None:
+        logging.info("run_prediction_loop has been called")
         # keep taking actions decided by the policy until it chooses to 'listen'
         should_predict_another_action = True
 
@@ -858,6 +879,7 @@ class MessageProcessor:
         while should_predict_another_action and self._should_handle_message(tracker):
             # this actually just calls the policy's method by the same name
             try:
+                logging.info("\t in loop: call predict_next_with_tracker_if_should")
                 action, prediction = self.predict_next_with_tracker_if_should(tracker)
             except ActionLimitReached:
                 logger.warning(
@@ -879,6 +901,7 @@ class MessageProcessor:
             should_predict_another_action = await self._run_action(
                 action, tracker, output_channel, self.nlg, prediction
             )
+            logging.info("\t in loop: should_predict_another_action is {should_predict_another_action} after run_action")
 
     @staticmethod
     def should_predict_another_action(action_name: Text) -> bool:
@@ -1046,10 +1069,13 @@ class MessageProcessor:
                 prediction_events=copy.deepcopy(prediction.events),
             )
             tracker.update_with_events(prediction.events, self.domain)
+            logging.info(prediction)
+            logging.info(prediction.events)
 
             # log the action and its produced events
             tracker.update(action.event_for_successful_execution(prediction))
 
+        logging.info(events)
         structlogger.debug(
             "processor.actions.log",
             action_name=action.name(),

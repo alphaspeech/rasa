@@ -36,6 +36,7 @@ from rasa.shared.core.domain import (
     USED_ENTITIES_KEY,
     USE_ENTITIES_KEY,
     IGNORE_ENTITIES_KEY,
+    REQUIRE_ENTITIES_KEY,
     State,
     Domain,
     KEY_FORMS,
@@ -48,6 +49,8 @@ from rasa.shared.core.trackers import DialogueStateTracker
 from rasa.shared.core.events import ActionExecuted, SlotSet, UserUttered
 from rasa.shared.utils.validation import YamlValidationException
 from rasa.utils.common import EXPECTED_WARNINGS
+
+# TODO: Add test for REQUIRE_ENTITIES_KEY
 
 
 def test_slots_states_before_user_utterance(domain: Domain):

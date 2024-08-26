@@ -64,6 +64,7 @@ from rasa.shared.nlu.constants import (
     RESPONSE_IDENTIFIER_DELIMITER,
     INTENT_NAME_KEY,
     ENTITIES,
+    REQUIRE_ENTITIES_KEY,
 )
 
 
@@ -458,6 +459,11 @@ class Domain:
                 and not intent_property[IGNORE_ENTITIES_KEY]
             ):
                 intent_property[IGNORE_ENTITIES_KEY] = []
+            if (
+                REQUIRE_ENTITIES_KEY in intent_property.keys()
+                and not intent_property[REQUIRE_ENTITIES_KEY]
+            ):
+                intent_property[REQUIRE_ENTITIES_KEY] = []
 
     @staticmethod
     def _sanitize_intents_in_domain_dict(data: Dict[Text, Any]) -> Dict[Text, Any]:
@@ -471,7 +477,7 @@ class Domain:
         data[KEY_INTENTS] = Domain._sort_intent_names_alphabetical_order(
             intents=data.get(KEY_INTENTS)
         )
-
+        logging.info(f"YES - Require intents in data[intents][intent][require_intents], e.g. ['date']")
         return data
 
     @staticmethod
@@ -701,6 +707,7 @@ class Domain:
                 intent_name: {
                     USE_ENTITIES_KEY: True,
                     IGNORE_ENTITIES_KEY: entity_properties.default_ignored_entities,
+                    REQUIRE_ENTITIES_KEY: False
                 }
             }
         else:
@@ -1560,6 +1567,10 @@ class Domain:
     def intents(self) -> List[Text]:
         """Returns sorted list of intents."""
         return sorted(self.intent_properties.keys())
+
+    def required_entities_for_intent(self, intent_name: Text) -> List[Text]:
+        """ Returns list of entities required for intent. Used by utterance rejection classifier."""
+        return self.intent_config(intent_name)[REQUIRE_ENTITIES_KEY]
 
     @rasa.shared.utils.common.lazy_property
     def entities(self) -> List[Text]:

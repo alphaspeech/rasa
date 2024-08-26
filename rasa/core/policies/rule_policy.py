@@ -32,6 +32,7 @@ from rasa.core.constants import (
     RULE_POLICY_PRIORITY,
     POLICY_PRIORITY,
     POLICY_MAX_HISTORY,
+    DEFAULT_UTTERANCE_REJECTION_THRESHOLD,
 )
 from rasa.shared.core.constants import (
     USER_INTENT_RESTART,
@@ -41,6 +42,7 @@ from rasa.shared.core.constants import (
     ACTION_RESTART_NAME,
     ACTION_SESSION_START_NAME,
     ACTION_DEFAULT_FALLBACK_NAME,
+    ACTION_DEFAULT_UTTERANCE_REJECTION_NAME,
     ACTION_BACK_NAME,
     RULE_SNIPPET_ACTION_NAME,
     SHOULD_NOT_BE_SET,
@@ -50,6 +52,7 @@ from rasa.shared.core.constants import (
     ACTIVE_LOOP,
     RULE_ONLY_SLOTS,
     RULE_ONLY_LOOPS,
+    ACTION_DEFAULT_UTTERANCE_REJECTION_NAME,
 )
 from rasa.shared.core.domain import InvalidDomain, State, Domain
 from rasa.shared.nlu.constants import ACTION_NAME, INTENT_NAME_KEY
@@ -124,11 +127,15 @@ class RulePolicy(MemoizationPolicy):
             # Confidence of the prediction if no rule matched and de-facto
             # threshold for a core fallback.
             "core_fallback_threshold": DEFAULT_CORE_FALLBACK_THRESHOLD,
+            "core_utterance_rejection_threshold": DEFAULT_UTTERANCE_REJECTION_THRESHOLD,
             # Name of the action which should be predicted if no rule matched.
             "core_fallback_action_name": ACTION_DEFAULT_FALLBACK_NAME,
+            # Name of the action which should be predicted if utterance was rejected
+            "core_utterance_rejection_action_name": ACTION_DEFAULT_UTTERANCE_REJECTION_NAME,
             # If `True` `core_fallback_action_name` is predicted in case no rule
             # matched.
             "enable_fallback_prediction": True,
+            "enable_utterance_rejection_prediction": True,
             # If `True` rules are restricted to contain a maximum of 1
             # user message. This is used to avoid that users build a state machine
             # using the rules.
@@ -159,7 +166,10 @@ class RulePolicy(MemoizationPolicy):
 
         self._fallback_action_name = config["core_fallback_action_name"]
         self._enable_fallback_prediction = config["enable_fallback_prediction"]
+        self._enable_utterance_rejection_prediction = config["enable_utterance_rejection_prediction"]
+        self._utterance_rejection_action_name = config["core_utterance_rejection_action_name"]
         self._check_for_contradictions = config["check_for_contradictions"]
+        # TODO: for utterance rejection?
 
         self._rules_sources: DefaultDict[Text, List[Tuple[Text, Text]]] = defaultdict(
             list
@@ -1238,6 +1248,12 @@ class RulePolicy(MemoizationPolicy):
             result[domain.index_for_action(self._fallback_action_name)] = self.config[
                 "core_fallback_threshold"
             ]
+
+        if self._enable_utterance_rejection_prediction:
+            result[domain.index_for_action(self._utterance_rejection_action_name)] = self.config[
+                "core_utterance_rejection_threshold"
+            ]
+
         return result
 
     def persist(self) -> None:

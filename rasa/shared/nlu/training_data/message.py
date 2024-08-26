@@ -2,6 +2,8 @@ from typing import Any, Optional, Tuple, Text, Dict, Set, List
 
 import typing
 import copy
+import logging
+import traceback
 
 import rasa.shared.utils.io
 from rasa.shared.exceptions import RasaException
@@ -22,6 +24,8 @@ from rasa.shared.nlu.constants import (
     ACTION_TEXT,
     ACTION_NAME,
     TEXT_TOKENS,
+    INTENT_NAME_KEY,
+    REQUIRE_ENTITIES_KEY,
 )
 from rasa.shared.constants import DIAGNOSTIC_DATA
 
@@ -61,6 +65,12 @@ class Message:
         else:
             self.output_properties = set()
         self.output_properties.add(TEXT)
+
+        logging.info(f"INIT MESSAGE IN message.py:\n\t{data}")
+        # stack = traceback.format_stack()
+        # logging.info("Call stack leading to this function call:")
+        # for line in stack[:-1]:  # Exclude the last line because it's the current function call
+        #     logging.info(line.strip())
 
     def add_features(self, features: Optional["Features"]) -> None:
         """Add more vectorized features to the message."""
@@ -181,6 +191,11 @@ class Message:
             split_intent, response_key = cls.separate_intent_response_key(intent)
             if split_intent:
                 data[INTENT] = split_intent
+
+                logging.info(f"I think here we should load the required entities here?")
+                # TODO: How to get required entities for intent here? need to access domain?
+                logging.info(f"\t{data[INTENT]}")
+                # TODO: UPDATE: nvm, this is never called when a new message comes in
             if response_key:
                 # intent label can be of the form - {intent}/{response_key},
                 # so store the full intent label in intent_response_key
@@ -455,6 +470,14 @@ class Message:
             (self.get(ACTION_TEXT) and not self.get(ACTION_NAME))
             or (self.get(TEXT) and not self.get(INTENT))
         )
+
+    def set_required_entities(self, required_entities: List[dict]) -> List[dict]:
+        #TODO: get required entities for intent
+        logging.info(f"Keys in data: {self.data.keys()}")
+        if INTENT in self.data.keys():
+            self.data[INTENT][REQUIRE_ENTITIES_KEY] = required_entities
+        else:
+            logging.warning("Tried to set required entities for message without intent.")
 
     def find_overlapping_entities(
         self,

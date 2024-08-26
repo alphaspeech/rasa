@@ -39,9 +39,9 @@ from rasa.shared.core.constants import (
     USER_INTENT_OUT_OF_SCOPE,
     ACTION_LISTEN_NAME,
     ACTION_RESTART_NAME,
-    ACTION_SEND_TEXT_NAME,
     ACTION_SESSION_START_NAME,
     ACTION_DEFAULT_FALLBACK_NAME,
+    ACTION_DEFAULT_UTTERANCE_REJECTION_NAME,
     ACTION_DEACTIVATE_LOOP_NAME,
     ACTION_REVERT_FALLBACK_EVENTS_NAME,
     ACTION_DEFAULT_ASK_AFFIRMATION_NAME,
@@ -102,6 +102,7 @@ def default_actions(action_endpoint: Optional[EndpointConfig] = None) -> List["A
         ActionRestart(),
         ActionSessionStart(),
         ActionDefaultFallback(),
+        ActionDefaultUtteranceRejection(),
         ActionDeactivateLoop(),
         ActionRevertFallbackEvents(),
         ActionDefaultAskAffirmation(),
@@ -630,6 +631,31 @@ class ActionDefaultFallback(ActionBotResponse):
         metadata: Optional[Dict[Text, Any]] = None,
     ) -> List[Event]:
         """Runs action. Please see parent class for the full docstring."""
+        # only utter the response if it is available
+        evts = await super().run(output_channel, nlg, tracker, domain)
+
+        return evts + [UserUtteranceReverted()]
+
+class ActionDefaultUtteranceRejection(ActionBotResponse):
+    """Executes the utterance rejection action and goes back to the prev state of the dialogue."""
+
+    def name(self) -> Text:
+        """Returns action default fallback name."""
+        return ACTION_DEFAULT_UTTERANCE_REJECTION_NAME
+
+    def __init__(self) -> None:
+        """Initializes action default fallback."""
+        super().__init__(None, silent_fail=True)
+
+    async def run(
+        self,
+        output_channel: "OutputChannel",
+        nlg: "NaturalLanguageGenerator",
+        tracker: "DialogueStateTracker",
+        domain: "Domain",
+    ) -> List[Event]:
+        """Runs action. Please see parent class for the full docstring."""
+        logging.info("********* ACTION FOR UTTERANCE REJECTION CALLED *********")
         # only utter the response if it is available
         evts = await super().run(output_channel, nlg, tracker, domain)
 
