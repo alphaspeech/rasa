@@ -29,7 +29,8 @@ from rasa.core.constants import (
     DEFAULT_UTTERANCE_REJECTION_UPON_UNEXPECTED_THRESHOLD,
     DEFAULT_UTTERANCE_REJECTION_METHOD,
     DEFAULT_UTTERANCE_REJECTION_FORCE_FINAL_VALUE,
-    DEFAULT_UTTERANCE_REJECTION_EXCLUDED_INTENTS
+    DEFAULT_UTTERANCE_REJECTION_EXCLUDED_INTENTS,
+    DEFAULT_UTTERANCE_REJECTION_CUSTOM_THRESHOLD,
 )
 from rasa.shared.constants import DEFAULT_UTTERANCE_REJECTION_INTENT_NAME, DOMAIN_SCHEMA_FILE
 
@@ -46,6 +47,7 @@ EFAULT_UTTERANCE_REJECTION_REQUIRE_ENTITIES_ENABLED_VALUE = False
 DEFAULT_THRESHOLD_KEY = "default"
 AMBIGUITY_THRESHOLD_KEY = "ambiguity_threshold"
 UNEXPECTED_UPON_REQUESTED_SLOT_KEY = "unexpected_upon_requested_slot"
+CUSTOM_THRESHOLDS_KEY = "CUSTOM"
 
 logger = logging.getLogger(__name__)
 
@@ -117,27 +119,27 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
         logging.info(f"INTENT INFO: {message.data.get(INTENT)}")
 
         # is component enabled? if not, always assume full utterance
-        # if not self.component_config[ENABLED_KEY]:
-        #     logging.info(f"\tFull utterance because component not enabled")
-        #     return True
-        #
-        # # is_final=True and forcing enabled?
-        # if self.component_config[FORCE_FINAL_ENABLED_KEY] and message.data.get("is_final", False): #TODO: get from http parse?
-        #     logging.info(f"\tFull utterance because was forced via is_final")
-        #     return True
-        # elif not self.component_config[FORCE_FINAL_ENABLED_KEY] and message.data.get("is_final", False): #TODO: get from http parse?
-        #     logging.info("The request is trying to force a final utterance, but force_final_enabled is set to false. "
-        #                  "is_final=True will be ignored. Review your config, if this is not the desired behavior.")
-        #
-        # # is the intent excluded from full utterance detection?
-        # if self.__intent_is_excluded(message):
-        #     logging.info(f"\tNOT Full utterance because intent excluded")
-        #     return False
-        #
-        # # does it meet thresholds?
-        # if not self.__is_above_thresholds(message):
-        #     logging.info(f"\tNOT Full utterance because intent thresholds not reached")
-        #     return False
+        if not self.component_config[ENABLED_KEY]:
+            logging.info(f"\tFull utterance because component not enabled")
+            return True
+
+        # is_final=True and forcing enabled?
+        if self.component_config[FORCE_FINAL_ENABLED_KEY] and message.data.get("is_final", False): #TODO: get from http parse?
+            logging.info(f"\tFull utterance because was forced via is_final")
+            return True
+        elif not self.component_config[FORCE_FINAL_ENABLED_KEY] and message.data.get("is_final", False): #TODO: get from http parse?
+            logging.info("The request is trying to force a final utterance, but force_final_enabled is set to false. "
+                         "is_final=True will be ignored. Review your config, if this is not the desired behavior.")
+
+        # is the intent excluded from full utterance detection?
+        if self.__intent_is_excluded(message):
+            logging.info(f"\tNOT Full utterance because intent excluded")
+            return False
+
+        # does it meet thresholds?
+        if not self.__is_above_thresholds(message):
+            logging.info(f"\tNOT Full utterance because intent thresholds not reached")
+            return False
 
         # does it contain the required entities?
         if self.component_config[REQUIRE_ENTITIES_ENABLED_KEY] and not self.__contains_required_entities(message):
@@ -146,13 +148,21 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
         logging.info(f"\tFull utterance because other criteria not met")
         return True
 
-    def __is_above_thresholds(self, message: Message):
+    def __is_above_thresholds(self, message: Message) -> bool:
+        nlu_confidence = message.data[INTENT].get(PREDICTED_CONFIDENCE_KEY)
+        message_intent = message.data.get(INTENT)
+
+        # check custom intent confidences
+        if (CUSTOM_THRESHOLDS_KEY in self.component_config[THRESHOLDS_KEY].keys() and
+                message_intent[INTENT_NAME_KEY] in self.component_config[THRESHOLDS_KEY][CUSTOM_THRESHOLDS_KEY].keys()):
+            threshold = self.component_config[THRESHOLDS_KEY][CUSTOM_THRESHOLDS_KEY][message_intent[INTENT_NAME_KEY]]
+            if nlu_confidence < threshold:
+                return False
+
         # intent confidence is above default threshold?
-        if self._nlu_confidence_below_threshold(message):
+        elif self._nlu_confidence_below_threshold(message):
             logging.info(f"\t\tBELOW threshold for _nlu_confidence_below_threshold")
             return False
-        # TODO: allow more threshold keys with intent names, so that thresholds can be set for intents.
-        # TODO: this would override the default threshold
 
         # intent confidence is at least AMBIGUITY_THRESHOLD higher than the next highest?
         ambiguous_prediction, confidence_delta = self._nlu_prediction_ambiguous(message)
@@ -209,7 +219,9 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
                 # Reject utterances below the DEFAULT_UTTERANCE_REJECTION_THRESHOLD
                 DEFAULT_THRESHOLD_KEY: DEFAULT_UTTERANCE_REJECTION_THRESHOLD,
                 # If the confidence scores for the top two intent predictions are closer than `AMBIGUITY_THRESHOLD_KEY`, reject utterance
-                AMBIGUITY_THRESHOLD_KEY: DEFAULT_UTTERANCE_REJECTION_AMBIGUITY_THRESHOLD
+                AMBIGUITY_THRESHOLD_KEY: DEFAULT_UTTERANCE_REJECTION_AMBIGUITY_THRESHOLD,
+                # By default, do not use custom thresholds
+                CUSTOM_THRESHOLDS_KEY: DEFAULT_UTTERANCE_REJECTION_CUSTOM_THRESHOLD
             },
             REQUIRE_ENTITIES_ENABLED_KEY: EFAULT_UTTERANCE_REJECTION_REQUIRE_ENTITIES_ENABLED_VALUE,
             # Handle rejection according to DEFAULT_UTTERANCE_REJECTION_METHOD
