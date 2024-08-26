@@ -18,7 +18,7 @@ from rasa.nlu.classifiers.utterance_rejection_classifier import (
     EXCLUDED_INTENTS_KEY,
     DEFAULT_THRESHOLD_KEY,
     AMBIGUITY_THRESHOLD_KEY,
-    UNEXPECTED_UPON_REQUESTED_SLOT_KEY, UtteranceRejectionClassifier
+    UNEXPECTED_UPON_REQUESTED_SLOT_KEY, UtteranceRejectionClassifier, CUSTOM_THRESHOLDS_KEY
 )
 from rasa.shared.nlu.training_data.message import Message
 from rasa.shared.nlu.constants import (
@@ -161,6 +161,25 @@ def create_utterance_rejection_classifier(
                 }
             ),
             {THRESHOLDS_KEY: {DEFAULT_THRESHOLD_KEY: 0.7}, REQUIRE_ENTITIES_ENABLED_KEY: True},
+        ),
+        (
+            Message(
+                data={
+                    TEXT: "some message",
+                    INTENT: {
+                        INTENT_NAME_KEY: "greet",
+                        PREDICTED_CONFIDENCE_KEY: 0.75,
+                    },
+                    ENTITIES: [],
+                    INTENT_RANKING_KEY: [
+                        {
+                            INTENT_NAME_KEY: "greet",
+                            PREDICTED_CONFIDENCE_KEY: 0.75,
+                        }
+                    ],
+                }
+            ),
+            {THRESHOLDS_KEY: {DEFAULT_THRESHOLD_KEY: 0.7, CUSTOM_THRESHOLDS_KEY: {"greet": 0.8}}},
         ),
     ],
 )
