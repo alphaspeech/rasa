@@ -477,7 +477,6 @@ class Domain:
         data[KEY_INTENTS] = Domain._sort_intent_names_alphabetical_order(
             intents=data.get(KEY_INTENTS)
         )
-        logging.info(f"YES - Require intents in data[intents][intent][require_intents], e.g. ['date']")
         return data
 
     @staticmethod
