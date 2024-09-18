@@ -66,12 +66,6 @@ class Message:
             self.output_properties = set()
         self.output_properties.add(TEXT)
 
-        logging.info(f"INIT MESSAGE IN message.py:\n\t{data}")
-        # stack = traceback.format_stack()
-        # logging.info("Call stack leading to this function call:")
-        # for line in stack[:-1]:  # Exclude the last line because it's the current function call
-        #     logging.info(line.strip())
-
     def add_features(self, features: Optional["Features"]) -> None:
         """Add more vectorized features to the message."""
         if features is not None:
@@ -191,11 +185,6 @@ class Message:
             split_intent, response_key = cls.separate_intent_response_key(intent)
             if split_intent:
                 data[INTENT] = split_intent
-
-                logging.info(f"I think here we should load the required entities here?")
-                # TODO: How to get required entities for intent here? need to access domain?
-                logging.info(f"\t{data[INTENT]}")
-                # TODO: UPDATE: nvm, this is never called when a new message comes in
             if response_key:
                 # intent label can be of the form - {intent}/{response_key},
                 # so store the full intent label in intent_response_key
