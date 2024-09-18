@@ -1,11 +1,7 @@
 from __future__ import annotations
 import logging
-import traceback
 from typing import Any, List, Text, Dict, Type, Union, Tuple, Optional
 
-from tensorflow.python.keras.saving.saving_utils import model_metadata
-
-import rasa.shared.utils.io
 from rasa.engine.recipes.default_recipe import DefaultV1Recipe
 from rasa.engine.graph import GraphComponent, ExecutionContext
 from rasa.engine.storage.resource import Resource
@@ -33,21 +29,22 @@ from rasa.core.constants import (
     DEFAULT_UTTERANCE_REJECTION_CUSTOM_THRESHOLD,
 )
 from rasa.shared.constants import DEFAULT_UTTERANCE_REJECTION_INTENT_NAME, DOMAIN_SCHEMA_FILE
+from rasa.shared.core.domain import KEY_INTENTS
 
 # maybe add intent reject to which the response is always listen? how ensure its not tracked?
 
 ENABLED_KEY = "enabled"
-THRESHOLDS_KEY = "threshold"
+THRESHOLDS_KEY = "thresholds"
 METHOD_KEY = "method"
 FORCE_FINAL_ENABLED_KEY = "force_final_enabled"
 EXCLUDED_INTENTS_KEY = "excluded_intents"
 REQUIRE_ENTITIES_ENABLED_KEY = "require_entities_enabled"
-EFAULT_UTTERANCE_REJECTION_REQUIRE_ENTITIES_ENABLED_VALUE = False
+DEFAULT_UTTERANCE_REJECTION_REQUIRE_ENTITIES_ENABLED_VALUE = True
 
 DEFAULT_THRESHOLD_KEY = "default"
 AMBIGUITY_THRESHOLD_KEY = "ambiguity_threshold"
 UNEXPECTED_UPON_REQUESTED_SLOT_KEY = "unexpected_upon_requested_slot"
-CUSTOM_THRESHOLDS_KEY = "CUSTOM"
+CUSTOM_THRESHOLDS_KEY = "custom"
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +57,9 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
 
     def __init__(self, config: Dict[Text, Any], domain: Optional[Domain] = None):
         """Constructs a new utterance rejection classifier."""
-        self.component_config = config
+        self.component_config = {**self.get_default_config(), **config}
+        self.intent_required_entities_map = {}
         self._domain = domain
-        print("Init Rejection Classifier")
-        logging.info(domain)
 
     @classmethod
     def create(
@@ -74,10 +70,9 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
         execution_context: ExecutionContext,
     ) -> UtteranceRejectionClassifier:
         """Creates a new component (see parent class for full docstring)."""
-        logging.info("CREATING URC")
         return cls(config)
 
-    def process(self, messages: List[Message]) -> List[Message]:
+    def process(self, messages: List[Message], domain: Optional[Domain] = None) -> List[Message]:
         """Process a list of incoming messages.
 
         This is the component's chance to process incoming
@@ -97,10 +92,11 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
         # logging.info("Call stack leading to this function call:")
         # for line in stack[:-1]:  # Exclude the last line because it's the current function call
         #     logging.info(line.strip())
+        self.__process_domain(domain)
 
         logging.info(f"PROCESSING MSG IN UTTERANCE REJECTION CLASSIFIER")
         for message in messages:
-            if self._full_utterance_detected(message):
+            if self.__full_utterance_detected(message):
                 logging.info(f"MESSAGE DATA: {message.data}")
                 continue
 
@@ -114,7 +110,18 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
 
         return messages
 
-    def _full_utterance_detected(self, message: Message):
+    def __process_domain(self, domain: Optional[Domain]):
+        if self.intent_required_entities_map == {} and domain is not None:
+            domain_intents = domain.as_dict()[KEY_INTENTS] # a list, now get the dicts that look like this: {'not_happy': {'require_entities': []}} or {'travel_data_travel_departure_date': {'require_entities': ['date']}}
+
+            for domain_intent in domain_intents:
+                if isinstance(domain_intent, dict): # filter out non-dicts
+                    for intent_name, value in domain_intent.items():
+                        if REQUIRE_ENTITIES_KEY in value.keys():
+                            required_entities = value[REQUIRE_ENTITIES_KEY] # can be [], ['date'], or [{"entity": "date", "role": "birthdate"}]
+                            self.intent_required_entities_map[intent_name] = [self._normalize_entity(e) for e in required_entities]
+
+    def __full_utterance_detected(self, message: Message):
         logging.info(f"Full Utterance detection running for: {message}.")
         logging.info(f"INTENT INFO: {message.data.get(INTENT)}")
 
@@ -142,6 +149,7 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
             return False
 
         # does it contain the required entities?
+        logging.info(f"Require entities: {self.component_config[REQUIRE_ENTITIES_ENABLED_KEY]}")
         if self.component_config[REQUIRE_ENTITIES_ENABLED_KEY] and not self.__contains_required_entities(message):
             logging.info(f"\tNOT Full utterance because required entities not contained")
             return False
@@ -150,12 +158,13 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
 
     def __is_above_thresholds(self, message: Message) -> bool:
         nlu_confidence = message.data[INTENT].get(PREDICTED_CONFIDENCE_KEY)
-        message_intent = message.data.get(INTENT)
+        message_intent_name = message.data.get(INTENT)[INTENT_NAME_KEY]
 
         # check custom intent confidences
         if (CUSTOM_THRESHOLDS_KEY in self.component_config[THRESHOLDS_KEY].keys() and
-                message_intent[INTENT_NAME_KEY] in self.component_config[THRESHOLDS_KEY][CUSTOM_THRESHOLDS_KEY].keys()):
-            threshold = self.component_config[THRESHOLDS_KEY][CUSTOM_THRESHOLDS_KEY][message_intent[INTENT_NAME_KEY]]
+                message_intent_name in self.component_config[THRESHOLDS_KEY][CUSTOM_THRESHOLDS_KEY].keys()):
+            threshold = self.component_config[THRESHOLDS_KEY][CUSTOM_THRESHOLDS_KEY][message_intent_name]
+            logging.info(f"{threshold}, {nlu_confidence}")
             if nlu_confidence < threshold:
                 return False
 
@@ -187,8 +196,8 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
         return False
 
     def __contains_required_entities(self, message: Message):
-        #  TODO: message.data.get(INTENT) or  message.data.get(METADATA) ?
-        if REQUIRE_ENTITIES_KEY not in message.data.get(INTENT).keys():
+        intent_name = message.data.get(INTENT)[INTENT_NAME_KEY]
+        if intent_name not in self.intent_required_entities_map.keys():
             return True
 
         def extract_relevant_keys(entity:dict):
@@ -198,7 +207,7 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
                 ENTITY_ATTRIBUTE_GROUP: entity.get(ENTITY_ATTRIBUTE_GROUP)
             }
 
-        required_entities = [extract_relevant_keys(e) for e in message.data.get(INTENT)[REQUIRE_ENTITIES_KEY]]
+        required_entities = [extract_relevant_keys(e) for e in self.intent_required_entities_map[intent_name]]
         predicted_entities = [extract_relevant_keys(e) for e in  message.data.get(ENTITIES)]
 
         extra_entities = [e for e in predicted_entities if e not in required_entities]
@@ -208,6 +217,12 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
             return False
 
         return True
+
+    def _normalize_entity(self, entity) -> dict:
+        if isinstance(entity, dict):
+            return entity
+        if isinstance(entity, str):
+            return {ENTITY_ATTRIBUTE_TYPE: entity}
 
     @staticmethod
     def get_default_config() -> Dict[Text, Any]:
@@ -223,7 +238,7 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
                 # By default, do not use custom thresholds
                 CUSTOM_THRESHOLDS_KEY: DEFAULT_UTTERANCE_REJECTION_CUSTOM_THRESHOLD
             },
-            REQUIRE_ENTITIES_ENABLED_KEY: EFAULT_UTTERANCE_REJECTION_REQUIRE_ENTITIES_ENABLED_VALUE,
+            REQUIRE_ENTITIES_ENABLED_KEY: DEFAULT_UTTERANCE_REJECTION_REQUIRE_ENTITIES_ENABLED_VALUE,
             # Handle rejection according to DEFAULT_UTTERANCE_REJECTION_METHOD
             METHOD_KEY: DEFAULT_UTTERANCE_REJECTION_METHOD,
             # Allow user to use is_final:True to force the NLU to accept it
