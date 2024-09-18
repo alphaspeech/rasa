@@ -585,7 +585,6 @@ class ResponseSelector(DIETClassifier):
                 },
                 RESPONSE_SELECTOR_RANKING_KEY: label_ranking,
             }
-            logging.info(f"prediction_dict: {prediction_dict}")
             self._set_message_property(message, prediction_dict, selector_key)
 
             if (
@@ -596,8 +595,6 @@ class ResponseSelector(DIETClassifier):
                 message.add_diagnostic_data(
                     self._execution_context.node_name, out.get(DIAGNOSTIC_DATA)
                 )
-
-        logging.info(f"**** FOUND FIRST INSTANCE OF PREDICTION APPLIED: {messages[0].as_dict()[INTENT]}")
 
         return messages
 
