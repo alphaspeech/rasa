@@ -15,6 +15,7 @@ METADATA_EXAMPLE = "example"
 METADATA_MODEL_ID = "model_id"
 INTENT_RANKING_KEY = "intent_ranking"
 REQUIRE_ENTITIES_KEY = "require_entities"
+IS_TRACKED_KEY = "is_tracked"
 PREDICTED_CONFIDENCE_KEY = "confidence"
 
 RESPONSE_IDENTIFIER_DELIMITER = "/"
