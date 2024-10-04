@@ -37,7 +37,7 @@ from rasa.shared.core.constants import (
     ACTION_SESSION_START_NAME,
     FOLLOWUP_ACTION,
     SESSION_START_METADATA_SLOT,
-    ACTION_EXTRACT_SLOTS, ACTION_DEFAULT_UTTERANCE_REJECTION_NAME,
+    ACTION_EXTRACT_SLOTS,
 )
 from rasa.shared.core.events import (
     ActionExecutionRejected,
@@ -55,7 +55,6 @@ from rasa.shared.constants import (
     DEFAULT_SENDER_ID,
     DOCS_URL_POLICIES,
     UTTER_PREFIX,
-    DEFAULT_UTTERANCE_REJECTION_INTENT_NAME
 )
 from rasa.core.nlg import NaturalLanguageGenerator
 from rasa.core.lock_store import LockStore
@@ -73,7 +72,7 @@ from rasa.shared.nlu.constants import (
     INTENT_NAME_KEY,
     PREDICTED_CONFIDENCE_KEY,
     TEXT,
-    REQUIRE_ENTITIES_KEY
+    IS_TRACKED_KEY,
 )
 from rasa.shared.nlu.training_data.message import Message
 from rasa.utils.endpoints import EndpointConfig
@@ -164,9 +163,9 @@ class MessageProcessor:
         await self._run_prediction_loop(message.output_channel, tracker)
 
         # apply is_tracked = false to output messages; determine which tracker to save
-        if "is_tracked" in message.parse_data.keys() and not message.parse_data["is_tracked"]:
+        if IS_TRACKED_KEY in message.parse_data.keys() and not message.parse_data[IS_TRACKED_KEY]:
             for m in message.output_channel.messages:
-                m["is_tracked"] = message.parse_data["is_tracked"]
+                m[IS_TRACKED_KEY] = message.parse_data[IS_TRACKED_KEY]
             tracker_to_save = previous_tracker_state  # save previous state if false
         else:
             tracker_to_save = tracker  # save the updated tracker otherwise
