@@ -16,7 +16,10 @@ from rasa.shared.nlu.constants import (
     PREDICTED_CONFIDENCE_KEY,
     ENTITIES,
     ENTITY_ATTRIBUTE_TYPE,
-    REQUIRE_ENTITIES_KEY, ENTITY_ATTRIBUTE_ROLE, ENTITY_ATTRIBUTE_GROUP,
+    REQUIRE_ENTITIES_KEY,
+    ENTITY_ATTRIBUTE_ROLE,
+    ENTITY_ATTRIBUTE_GROUP,
+    IS_TRACKED_KEY
 )
 from rasa.core.constants import (
     DEFAULT_UTTERANCE_REJECTION_ENABLED_VALUE,
@@ -45,6 +48,10 @@ DEFAULT_THRESHOLD_KEY = "default"
 AMBIGUITY_THRESHOLD_KEY = "ambiguity_threshold"
 UNEXPECTED_UPON_REQUESTED_SLOT_KEY = "unexpected_upon_requested_slot"
 CUSTOM_THRESHOLDS_KEY = "custom"
+
+REJECTION_MATRIX_KEY = "rejection_matrix"
+IS_FULL_UTTERANCE_MATRIX_KEY = "is_full_utterane"
+RATINGS_MATRIX_KEY = "ratings"
 
 logger = logging.getLogger(__name__)
 
@@ -88,29 +95,32 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
             messages: List containing :class:
             `rasa.shared.nlu.training_data.message.Message` to process.
         """
-        # stack = traceback.format_stack()
-        # logging.info("Call stack leading to this function call:")
-        # for line in stack[:-1]:  # Exclude the last line because it's the current function call
-        #     logging.info(line.strip())
-        self.__process_domain(domain)
-
+        self._process_domain(domain)
+        logging.info(self.component_config[METHOD_KEY])
         logging.info(f"PROCESSING MSG IN UTTERANCE REJECTION CLASSIFIER")
         for message in messages:
-            if self.__full_utterance_detected(message):
+            if self._full_utterance_detected(message):
+                if self.component_config[METHOD_KEY] == "untracked":
+                    message.data[IS_TRACKED_KEY] = True
                 logging.info(f"MESSAGE DATA: {message.data}")
                 continue
 
             # we assume that the fallback confidence
             # is the same as the fallback threshold
-            confidence = self.component_config[THRESHOLDS_KEY][DEFAULT_THRESHOLD_KEY]
-            message.data[INTENT] = _reject_intent(confidence)
-            message.data.setdefault(INTENT_RANKING_KEY, [])
-            message.data[INTENT_RANKING_KEY].insert(0, _reject_intent(confidence))
-            logging.info(f"MESSAGE DATA: {message.data}")
+            if self.component_config[METHOD_KEY] == "untracked":
+                message.data[IS_TRACKED_KEY] = False
+            else:
+                if self.component_config[METHOD_KEY] != "ignore":
+                    logging.warning(f"Utterance Rejection method {self.component_config[METHOD_KEY]} is not a supported method. Falling back to 'ignore'.")
+                confidence = self.component_config[THRESHOLDS_KEY][DEFAULT_THRESHOLD_KEY]
+                message.data[INTENT] = _reject_intent(confidence)
+                message.data.setdefault(INTENT_RANKING_KEY, [])
+                message.data[INTENT_RANKING_KEY].insert(0, _reject_intent(confidence))
+            logging.info(f"MESSAGE DATA2: {message.data}")
 
         return messages
 
-    def __process_domain(self, domain: Optional[Domain]):
+    def _process_domain(self, domain: Optional[Domain]):
         if self.intent_required_entities_map == {} and domain is not None:
             domain_intents = domain.as_dict()[KEY_INTENTS] # a list, now get the dicts that look like this: {'not_happy': {'require_entities': []}} or {'travel_data_travel_departure_date': {'require_entities': ['date']}}
 
@@ -119,9 +129,21 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
                     for intent_name, value in domain_intent.items():
                         if REQUIRE_ENTITIES_KEY in value.keys():
                             required_entities = value[REQUIRE_ENTITIES_KEY] # can be [], ['date'], or [{"entity": "date", "role": "birthdate"}]
-                            self.intent_required_entities_map[intent_name] = [self._normalize_entity(e) for e in required_entities]
+                            if isinstance(required_entities, bool):
+                                self.intent_required_entities_map[intent_name] = required_entities
+                            else:
+                                self.intent_required_entities_map[intent_name] = [self._normalize_entity(e) for e in required_entities]
 
-    def __full_utterance_detected(self, message: Message):
+    def _full_utterance_detected(self, message: Message):
+        rejection_matrix = {
+            IS_FULL_UTTERANCE_MATRIX_KEY: True,
+            RATINGS_MATRIX_KEY: {
+                DEFAULT_THRESHOLD_KEY: True,
+                AMBIGUITY_THRESHOLD_KEY: True,
+                REQUIRE_ENTITIES_KEY: True,
+                EXCLUDED_INTENTS_KEY: False
+            }
+        }
         logging.info(f"Full Utterance detection running for: {message}.")
         logging.info(f"INTENT INFO: {message.data.get(INTENT)}")
 
@@ -139,24 +161,24 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
                          "is_final=True will be ignored. Review your config, if this is not the desired behavior.")
 
         # is the intent excluded from full utterance detection?
-        if self.__intent_is_excluded(message):
+        if self._intent_is_excluded(message):
             logging.info(f"\tNOT Full utterance because intent excluded")
             return False
 
         # does it meet thresholds?
-        if not self.__is_above_thresholds(message):
+        if not self._is_above_thresholds(message):
             logging.info(f"\tNOT Full utterance because intent thresholds not reached")
             return False
 
         # does it contain the required entities?
         logging.info(f"Require entities: {self.component_config[REQUIRE_ENTITIES_ENABLED_KEY]}")
-        if self.component_config[REQUIRE_ENTITIES_ENABLED_KEY] and not self.__contains_required_entities(message):
+        if self.component_config[REQUIRE_ENTITIES_ENABLED_KEY] and not self._contains_required_entities(message):
             logging.info(f"\tNOT Full utterance because required entities not contained")
             return False
         logging.info(f"\tFull utterance because other criteria not met")
         return True
 
-    def __is_above_thresholds(self, message: Message) -> bool:
+    def _is_above_thresholds(self, message: Message) -> bool:
         nlu_confidence = message.data[INTENT].get(PREDICTED_CONFIDENCE_KEY)
         message_intent_name = message.data.get(INTENT)[INTENT_NAME_KEY]
 
@@ -186,7 +208,7 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
         logging.info(f"\t\tABOVE thresholds!")
         return True
 
-    def __intent_is_excluded(self, message: Message):
+    def _intent_is_excluded(self, message: Message):
         logging.info(f"Intent: {message.data.get(INTENT)[INTENT_NAME_KEY]}; excluded: { self.component_config[EXCLUDED_INTENTS_KEY]}")
         if EXCLUDED_INTENTS_KEY not in self.component_config.keys():
             return False
@@ -195,28 +217,31 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
             return True
         return False
 
-    def __contains_required_entities(self, message: Message):
+    def _contains_required_entities(self, message: Message):
         intent_name = message.data.get(INTENT)[INTENT_NAME_KEY]
         if intent_name not in self.intent_required_entities_map.keys():
             return True
 
-        def extract_relevant_keys(entity:dict):
-            return {
-                ENTITY_ATTRIBUTE_TYPE: entity.get(ENTITY_ATTRIBUTE_TYPE),
-                ENTITY_ATTRIBUTE_ROLE: entity.get(ENTITY_ATTRIBUTE_ROLE),
-                ENTITY_ATTRIBUTE_GROUP: entity.get(ENTITY_ATTRIBUTE_GROUP)
-            }
+        available_input = message.data.get(ENTITIES)
+        required_input = self.intent_required_entities_map[intent_name]
+        logging.info(f"{available_input} {required_input}")
 
-        required_entities = [extract_relevant_keys(e) for e in self.intent_required_entities_map[intent_name]]
-        predicted_entities = [extract_relevant_keys(e) for e in  message.data.get(ENTITIES)]
+        # require entities: True means must have any entities
+        if isinstance(required_input, bool) and required_input:
+            return len(available_input) > 0
 
-        extra_entities = [e for e in predicted_entities if e not in required_entities]
-        missing_entities = [e for e in required_entities if e not in predicted_entities]
+        # require_entities = [] means available_input must have no entities
+        if len(required_input) == 0:
+            return len(available_input) == 0
 
-        if len(extra_entities) > 0 or len(missing_entities) > 0:
+        # else check if all required entities are included
+        for requ_input in required_input:
+            for key, value in requ_input.items():
+                available_input = [a for a in available_input if key in a.keys() and a[key] == value]
+        if len(available_input) > 0:
+            return True
+        else:
             return False
-
-        return True
 
     def _normalize_entity(self, entity) -> dict:
         if isinstance(entity, dict):
@@ -264,6 +289,7 @@ class UtteranceRejectionClassifier(GraphComponent, IntentClassifier):
     def _nlu_confidence_below_threshold(self, message: Message) -> bool:
         nlu_confidence = message.data[INTENT].get(PREDICTED_CONFIDENCE_KEY)
         return nlu_confidence < self.component_config[THRESHOLDS_KEY][DEFAULT_THRESHOLD_KEY]
+
 
 def _reject_intent(confidence: float) -> Dict[Text, Union[Text, float]]:
     return {
