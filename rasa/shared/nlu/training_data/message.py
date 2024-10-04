@@ -24,6 +24,7 @@ from rasa.shared.nlu.constants import (
     ACTION_TEXT,
     ACTION_NAME,
     TEXT_TOKENS,
+    IS_TRACKED_KEY,
     INTENT_NAME_KEY,
     REQUIRE_ENTITIES_KEY,
 )
@@ -65,6 +66,7 @@ class Message:
         else:
             self.output_properties = set()
         self.output_properties.add(TEXT)
+        self.output_properties.add(IS_TRACKED_KEY)
 
     def add_features(self, features: Optional["Features"]) -> None:
         """Add more vectorized features to the message."""
