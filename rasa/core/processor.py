@@ -21,7 +21,7 @@ from rasa.shared.data import TrainingType
 import rasa.shared.utils.io
 import rasa.core.actions.action
 from rasa.core import jobs
-from rasa.core.actions.action import Action
+from rasa.core.actions.action import Action, action_for_name_or_text
 from rasa.core.channels.channel import (
     CollectingOutputChannel,
     OutputChannel,
@@ -37,7 +37,7 @@ from rasa.shared.core.constants import (
     ACTION_SESSION_START_NAME,
     FOLLOWUP_ACTION,
     SESSION_START_METADATA_SLOT,
-    ACTION_EXTRACT_SLOTS,
+    ACTION_EXTRACT_SLOTS, ACTION_DEFAULT_UTTERANCE_REJECTION_NAME,
 )
 from rasa.shared.core.events import (
     ActionExecutionRejected,
@@ -156,33 +156,24 @@ class MessageProcessor:
         self, message: UserMessage
     ) -> Optional[List[Dict[Text, Any]]]:
         """Handle a single message with this processor."""
-        logging.info("handle_message in processor.py has been called")
-        # preprocess message if necessary
+        previous_tracker_state = (await self.get_tracker(message.sender_id)).copy()
+
         tracker = await self.log_message(message, should_save_tracker=False)
-
-        logging.info(self.domain.required_entities_for_intent("travel_data_travel_departure_date"))
-
-        # TODO: here message.parse_data["is_final"] contains the utterance detection result and we can use it to do whatever the fuck we waaant
-        logging.info("CHECK IF MSG DATA UPDATED")
-        # TODO: move this earlier so that its there before URC is processing
-        logging.info(message.parse_data)
-
-        if self.model_metadata.training_type == TrainingType.NLU:
-            await self.save_tracker(tracker)
-            rasa.shared.utils.io.raise_warning(
-                "No core model. Skipping action prediction and execution.",
-                docs=DOCS_URL_POLICIES,
-            )
-            return None
-
         tracker = await self.run_action_extract_slots(message.output_channel, tracker)
 
-        logging.info("gonna run the prediciton loop now woopdy")
         await self._run_prediction_loop(message.output_channel, tracker)
 
-        await self.run_anonymization_pipeline(tracker)
+        # apply is_tracked = false to output messages; determine which tracker to save
+        if "is_tracked" in message.parse_data.keys() and not message.parse_data["is_tracked"]:
+            for m in message.output_channel.messages:
+                m["is_tracked"] = message.parse_data["is_tracked"]
+            tracker_to_save = previous_tracker_state  # save previous state if false
+        else:
+            tracker_to_save = tracker  # save the updated tracker otherwise
 
-        await self.save_tracker(tracker)
+        await self.run_anonymization_pipeline(tracker_to_save)
+
+        await self.save_tracker(tracker_to_save)
 
         if isinstance(message.output_channel, CollectingOutputChannel):
             return message.output_channel.messages
@@ -795,7 +786,6 @@ class MessageProcessor:
         parse_data.update(
             parsed_message.as_dict(only_output_properties=only_output_properties)
         )
-        parse_data[INTENT][REQUIRE_ENTITIES_KEY] = self.domain.required_entities_for_intent(parse_data[INTENT][INTENT_NAME_KEY]) # TODO: This didnt work i think, remove?
         logging.info(f"_parse_message_with_graph: {parse_data}")
         return parse_data
 
@@ -902,7 +892,6 @@ class MessageProcessor:
             should_predict_another_action = await self._run_action(
                 action, tracker, output_channel, self.nlg, prediction
             )
-            logging.info("\t in loop: should_predict_another_action is {should_predict_another_action} after run_action")
 
     @staticmethod
     def should_predict_another_action(action_name: Text) -> bool:
