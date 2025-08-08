@@ -211,6 +211,7 @@ async def load_agent(
     tracker_store = None
     lock_store = None
     generator = None
+    summarizer = None
     action_endpoint = None
     http_interpreter = None
 
@@ -225,9 +226,12 @@ async def load_agent(
         model_server = endpoints.model if endpoints.model else model_server
         if endpoints.nlu:
             http_interpreter = RasaNLUHttpInterpreter(endpoints.nlu)
+        if endpoints.llm_engine and endpoints.llm_engine.kwargs.get("summarize_responses", False):
+            summarizer = endpoints.llm_engine
 
     agent = Agent(
         generator=generator,
+        summarizer=summarizer,
         tracker_store=tracker_store,
         lock_store=lock_store,
         action_endpoint=action_endpoint,
@@ -288,6 +292,7 @@ class Agent:
         self,
         domain: Optional[Domain] = None,
         generator: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
+        summarizer: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
         tracker_store: Optional[TrackerStore] = None,
         lock_store: Optional[LockStore] = None,
         action_endpoint: Optional[EndpointConfig] = None,
@@ -301,6 +306,7 @@ class Agent:
         self.processor: Optional[MessageProcessor] = None
 
         self.nlg = NaturalLanguageGenerator.create(generator, self.domain)
+        self.summarizer = NaturalLanguageGenerator.create(summarizer, self.domain)
         self.tracker_store = self._create_tracker_store(tracker_store, self.domain)
         self.lock_store = self._create_lock_store(lock_store)
         self.action_endpoint = action_endpoint
@@ -349,6 +355,7 @@ class Agent:
             lock_store=self.lock_store,
             action_endpoint=self.action_endpoint,
             generator=self.nlg,
+            summarizer=self.summarizer,
             http_interpreter=self.http_interpreter,
         )
         self.domain = self.processor.domain
@@ -543,3 +550,63 @@ class Agent:
             raise RasaException(
                 f"Persistor not found for remote storage: '{self.remote_storage}'."
             )
+
+#
+#
+# import requests
+# import json
+# class Agent(AgentX):
+#     def __init__(
+#         self,
+#         domain: Optional[Domain] = None,
+#         generator: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
+#         tracker_store: Optional[TrackerStore] = None,
+#         lock_store: Optional[LockStore] = None,
+#         action_endpoint: Optional[EndpointConfig] = None,
+#         fingerprint: Optional[Text] = None,
+#         model_server: Optional[EndpointConfig] = None,
+#         remote_storage: Optional[Text] = None,
+#         http_interpreter: Optional[RasaNLUHttpInterpreter] = None,
+#     ):
+#         #super().__init__(domain, generator, tracker_store, lock_store, action_endpoint, fingerprint, model_server, remote_storage, http_interpreter)
+#         super().__init__(None, None, None, None, None, None, None, None, None)
+#         self.url = "https://llm.dev.alphaspeech.de/api/chat"
+#         self.context_storage = {}
+#         self.model = "linguwerk"
+#         self.action_endpoint = None
+#
+#     def is_ready(self) -> bool:
+#         """Check if all necessary components are instantiated to use agent."""
+#         return self.url is not None
+#
+#     async def handle_message(
+#         self, message: UserMessage
+#     ) -> Optional[List[Dict[Text, Any]]]:
+#         logging.info("Reached handle message function!")
+#         """Handle a single message."""
+#         if not self.is_ready():
+#             logger.info("Ignoring message as there is no agent to handle it.")
+#             return None
+#
+#         async with self.lock_store.lock(message.sender_id):
+#             user_input = message.text
+#             session_id = message.sender_id
+#
+#             headers = {
+#                 "Content-Type": "application/json"
+#             }
+#
+#             data = {"model": self.model, "stream": False}
+#
+#             if session_id not in self.context_storage.keys():
+#                 self.context_storage[session_id] = []
+#             self.context_storage[session_id].append({"role": "user", "content": user_input})
+#             data["messages"] = self.context_storage[session_id]
+#             response = requests.post(self.url, headers=headers, data=json.dumps(data))
+#             content = json.loads(response.content.decode('utf-8'))
+#             self.context_storage[session_id].append(content["message"])
+#             reply = content["message"]["content"]
+#
+#             logging.info(f"Reply from LLM: {reply}")
+#
+#             return await message.output_channel.send_response(session_id, {"text": reply})

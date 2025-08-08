@@ -16,6 +16,7 @@ from rasa.shared.core.domain import (
 )
 from rasa.shared.core.events import ActionExecuted, UserUttered
 from rasa.shared.core.training_data.structures import StoryGraph
+from rasa.llm_nlu.utils.structures import GoalData
 from rasa.shared.nlu.training_data.message import Message
 from rasa.shared.nlu.training_data.training_data import TrainingData
 from rasa.shared.nlu.constants import ENTITIES, ACTION_NAME
@@ -33,6 +34,7 @@ class TrainingDataImporter(ABC):
         config_file: Optional[Text] = None,
         domain_path: Optional[Text] = None,
         training_data_paths: Optional[Union[List[Text], Text]] = None,
+        goals_data_paths: Optional[Union[List[Text], Text]] = None,
         **kwargs: Any,
     ) -> None:
         """Initialise the importer."""
@@ -93,17 +95,27 @@ class TrainingDataImporter(ABC):
         """
         ...
 
+    @abstractmethod
+    def get_goals(self) -> GoalData:
+        """Retrieves the defined conversational goals that should be used for training.
+
+        Returns:
+            `FlowsList` containing all loaded flows.
+        """
+        return GoalData({})
+
     @staticmethod
     def load_from_config(
         config_path: Text,
         domain_path: Optional[Text] = None,
         training_data_paths: Optional[List[Text]] = None,
+        goals_data_paths: Optional[List[Text]] = None,
         args: Optional[Dict[Text, Any]] = {},
     ) -> "TrainingDataImporter":
         """Loads a `TrainingDataImporter` instance from a configuration file."""
         config = rasa.shared.utils.io.read_config_file(config_path)
         return TrainingDataImporter.load_from_dict(
-            config, config_path, domain_path, training_data_paths, args
+            config, config_path, domain_path, training_data_paths, goals_data_paths, args
         )
 
     @staticmethod
@@ -150,23 +162,24 @@ class TrainingDataImporter(ABC):
         config_path: Optional[Text] = None,
         domain_path: Optional[Text] = None,
         training_data_paths: Optional[List[Text]] = None,
+        goal_data_paths: Optional[List[Text]] = None,
         args: Optional[Dict[Text, Any]] = {},
     ) -> "TrainingDataImporter":
         """Loads a `TrainingDataImporter` instance from a dictionary."""
-        from rasa.shared.importers.rasa import RasaFileImporter
+        from rasa.shared.importers.goals import ExtendedRasaFileImporter
 
         config = config or {}
         importers = config.get("importers", [])
         importers = [
             TrainingDataImporter._importer_from_dict(
-                importer, config_path, domain_path, training_data_paths, args
+                importer, config_path, domain_path, training_data_paths, goal_data_paths, args
             )
             for importer in importers
         ]
         importers = [importer for importer in importers if importer]
         if not importers:
             importers = [
-                RasaFileImporter(config_path, domain_path, training_data_paths)
+                ExtendedRasaFileImporter(config_path, domain_path, training_data_paths, goal_data_paths)
             ]
 
         return E2EImporter(ResponsesSyncImporter(CombinedDataImporter(importers)))
@@ -177,8 +190,11 @@ class TrainingDataImporter(ABC):
         config_path: Text,
         domain_path: Optional[Text] = None,
         training_data_paths: Optional[List[Text]] = None,
+        goals_data_paths: Optional[List[Text]] = None,
         args: Optional[Dict[Text, Any]] = {},
     ) -> Optional["TrainingDataImporter"]:
+        raise Exception("TEST EXCEPTION - did we hit this code?")
+
         from rasa.shared.importers.multi_project import MultiProjectImporter
         from rasa.shared.importers.rasa import RasaFileImporter
 
@@ -307,6 +323,16 @@ class CombinedDataImporter(TrainingDataImporter):
         )
 
     @rasa.shared.utils.common.cached_method
+    def get_goals(self) -> Dict[Text, Any]:
+        """Retrieves defined conversational goals (see parent class for full docstring)."""
+
+        goals = [importer.get_goals() for importer in self._importers]
+
+        return reduce(
+            lambda merged, other: merged.merge(other), goals, GoalData()
+        )
+
+    @rasa.shared.utils.common.cached_method
     def get_config_file_for_auto_config(self) -> Optional[Text]:
         """Returns config file path for auto-config only if there is a single one."""
         if len(self._importers) != 1:
@@ -429,6 +455,11 @@ class ResponsesSyncImporter(TrainingDataImporter):
         """Retrieves conversation test stories (see parent class for full docstring)."""
         return self._importer.get_conversation_tests()
 
+    def get_goals(self) -> GoalData:
+        """Retrieves goals (see parent class for full docstring)."""
+        # TODO: Is a merge here necessairy like below?
+        return self._importer.get_goals()
+
     @rasa.shared.utils.common.cached_method
     def get_nlu_data(self, language: Optional[Text] = "en") -> TrainingData:
         """Updates NLU data with responses for retrieval intents from domain."""
@@ -506,6 +537,10 @@ class E2EImporter(TrainingDataImporter):
     def get_config(self) -> Dict:
         """Retrieves model config (see parent class for full docstring)."""
         return self.importer.get_config()
+
+    def get_goals(self) -> GoalData:
+        """Retrieves goals (see parent class for full docstring)."""
+        return self.importer.get_goals()
 
     @rasa.shared.utils.common.cached_method
     def get_config_file_for_auto_config(self) -> Optional[Text]:

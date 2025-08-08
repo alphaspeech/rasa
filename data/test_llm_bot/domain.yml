@@ -1,0 +1,80 @@
+version: "3.1"
+
+slots:
+  first_name:
+    type: text
+    mappings:
+      - type: from_llm
+  last_name:
+    type: text
+    mappings:
+      - type: from_llm
+  appointment_type:
+    type: text
+    mappings:
+      - type: from_llm
+    conditions:
+      - active_goal: book_appointment
+  date:
+    type: text
+    mappings:
+      - type: from_llm
+    conditions:
+      - active_goal: book_appointment
+  cancellation_reason:
+    type: text
+    mappings:
+      - type: from_llm
+    conditions:
+      - active_goal: cancel_appointment
+
+responses:
+  utter_ask_name:
+    - text: "What is your name, please?"
+      metadata:
+        rephrase: False
+
+  utter_ask_appointment_type:
+    - text: "What is the appointment for?"
+      metadata:
+        rephrase: True
+
+  utter_ask_date:
+    - text: "When do you want an appointment?"
+      metadata:
+        rephrase: True
+
+  utter_ask_time:
+    - text: "What time would be good?"
+      metadata:
+        rephrase: True
+
+  utter_ask_cancellation_reason:
+    - text: "Whats the reason for your cancellation?"
+      metadata:
+        rephrase: True
+
+  utter_appointment_complete:
+    - text: "I noted your appointment for {date}."
+      metadata:
+        rephrase: True
+
+  utter_free_chitchat_response:
+    - text: "placeholder"
+      metadata:
+        rephrase: True
+        rephrase_prompt: |
+          You are a AI assitent for a radiologist.
+          Your responsible for handling appointments and helping users with them.
+          Usually the user will end up wanting to book an appointment, but as of now, their intentions are unclear.
+          You are professional, formal, and friendly.
+          The user might be making friendly smalltalk, generate a response suited for the context.
+
+  utter_confirm_cancellation:
+    - text: "Alright, I cancelled your appointment."
+      metadata:
+        rephrase: True
+
+actions:
+  action_find_appointment:
+    - description: "You found the users appointment. its a head CT scan on the 19. July at 9 am."

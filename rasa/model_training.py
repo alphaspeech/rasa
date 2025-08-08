@@ -1,3 +1,4 @@
+import logging
 import time
 from pathlib import Path
 from typing import Text, NamedTuple, Optional, List, Union, Dict, Any
@@ -15,6 +16,7 @@ from rasa.engine.training.graph_trainer import GraphTrainer
 from rasa.shared.core.events import SlotSet
 from rasa.shared.core.training_data.structures import StoryGraph
 from rasa.shared.data import TrainingType
+from rasa.shared.importers.goals import ExtendedRasaFileImporter
 from rasa.shared.importers.importer import TrainingDataImporter
 from rasa import telemetry
 from rasa.shared.core.domain import Domain
@@ -128,6 +130,7 @@ def train(
     domain: Text,
     config: Text,
     training_files: Optional[Union[Text, List[Text]]],
+    goals_data_paths: Optional[Union[Text, List[Text]]],
     output: Text = rasa.shared.constants.DEFAULT_MODELS_PATH,
     dry_run: bool = False,
     force_training: bool = False,
@@ -144,6 +147,7 @@ def train(
         domain: Path to the domain file.
         config: Path to the config file.
         training_files: List of paths to training data files.
+        goals_data_paths: List of paths to goals data files.
         output: Output directory for the trained model.
         dry_run: If `True` then no training will be done, and the information about
             whether the training needs to be done will be printed.
@@ -163,11 +167,12 @@ def train(
         An instance of `TrainingResult`.
     """
     file_importer = TrainingDataImporter.load_from_config(
-        config, domain, training_files, core_additional_arguments
+        config, domain, training_files, goals_data_paths, core_additional_arguments
     )
 
     stories = file_importer.get_stories()
     nlu_data = file_importer.get_nlu_data()
+    goals = file_importer.get_goals()
 
     training_type = TrainingType.BOTH
 
@@ -175,7 +180,7 @@ def train(
         rasa.shared.utils.common.mark_as_experimental_feature("end-to-end training")
         training_type = TrainingType.END_TO_END
 
-    if stories.is_empty() and nlu_data.contains_no_pure_nlu_data():
+    if stories.is_empty() and nlu_data.contains_no_pure_nlu_data() and goals.is_empty():
         rasa.shared.utils.cli.print_error(
             "No training data given. Please provide stories and NLU data in "
             "order to train a Rasa model using the '--data' argument."
@@ -191,7 +196,7 @@ def train(
         )
         training_type = TrainingType.NLU
 
-    elif stories.is_empty():
+    elif stories.is_empty() and goals.is_empty():
         rasa.shared.utils.cli.print_warning(
             "No stories present. Just a Rasa NLU model will be trained."
         )

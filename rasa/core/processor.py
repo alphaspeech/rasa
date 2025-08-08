@@ -21,7 +21,7 @@ from rasa.shared.data import TrainingType
 import rasa.shared.utils.io
 import rasa.core.actions.action
 from rasa.core import jobs
-from rasa.core.actions.action import Action
+from rasa.core.actions.action import Action, ActionSummarizedBotResponse
 from rasa.core.channels.channel import (
     CollectingOutputChannel,
     OutputChannel,
@@ -91,6 +91,7 @@ class MessageProcessor:
         tracker_store: rasa.core.tracker_store.TrackerStore,
         lock_store: LockStore,
         generator: NaturalLanguageGenerator,
+        summarizer: NaturalLanguageGenerator = None,
         action_endpoint: Optional[EndpointConfig] = None,
         max_number_of_predictions: int = MAX_NUMBER_OF_PREDICTIONS,
         on_circuit_break: Optional[LambdaType] = None,
@@ -98,6 +99,7 @@ class MessageProcessor:
     ) -> None:
         """Initializes a `MessageProcessor`."""
         self.nlg = generator
+        self.summarizer = summarizer
         self.tracker_store = tracker_store
         self.lock_store = lock_store
         self.max_number_of_predictions = max_number_of_predictions
@@ -168,6 +170,8 @@ class MessageProcessor:
         tracker = await self.run_action_extract_slots(message.output_channel, tracker)
 
         await self._run_prediction_loop(message.output_channel, tracker)
+
+        await self._summarize_bot_utteranced(message, tracker)
 
         await self.run_anonymization_pipeline(tracker)
 
@@ -301,6 +305,7 @@ class MessageProcessor:
             output_channel: Output channel for potential utterances in a custom
                 `ActionSessionStart`.
         """
+        tracker.reset_predicted_next_actions()
         if not tracker.applied_events() or self._has_session_expired(tracker):
             logger.debug(
                 f"Starting a new session for conversation ID '{tracker.sender_id}'."
@@ -880,6 +885,41 @@ class MessageProcessor:
                 action, tracker, output_channel, self.nlg, prediction
             )
 
+    async def _summarize_bot_utteranced(self, message: UserMessage, tracker: DialogueStateTracker) -> None:
+        """
+        Summarized the output utterances using llm to insure cohesive reply.
+        """
+        if self.summarizer is None:
+            return
+
+        bot_uttered_events = []
+        for event in reversed(tracker.applied_events()):
+            if isinstance(event, BotUttered):
+                bot_uttered_events = [event] + bot_uttered_events
+            elif isinstance(event, UserUttered):
+                break
+
+        if len(bot_uttered_events) >= 0:
+            summary_events = await ActionSummarizedBotResponse(bot_uttered_events).run(
+                message.output_channel,
+                self.summarizer,
+                tracker,
+                self.domain
+            )
+
+            # remove all latest BotUttered events
+            e_num = len(tracker.events)
+            while e_num > 0:
+                e_num = e_num - 1
+                if isinstance(tracker.events[e_num], UserUttered):
+                    break
+                if isinstance(tracker.events[e_num], BotUttered):
+                    del tracker.events[e_num]
+
+            # replace with summarized BotUttered event
+            for summary_event in summary_events:
+                tracker.update(summary_event, self.domain)
+
     @staticmethod
     def should_predict_another_action(action_name: Text) -> bool:
         """Determine whether the processor should predict another action.
@@ -1127,4 +1167,5 @@ class MessageProcessor:
             inputs={PLACEHOLDER_TRACKER: tracker}, targets=[target]
         )
         policy_prediction = results[target]
+
         return policy_prediction

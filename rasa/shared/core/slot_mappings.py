@@ -59,6 +59,7 @@ class SlotMapping:
             SlotMappingType.FROM_INTENT: ["value"],
             SlotMappingType.FROM_TRIGGER_INTENT: ["value"],
             SlotMappingType.FROM_TEXT: [],
+            SlotMappingType.FROM_LLM: [],
             SlotMappingType.CUSTOM: [],
         }
 
@@ -71,6 +72,7 @@ class SlotMapping:
                     f"for slot '{slot_name}'. Please see "
                     f"{DOCS_URL_SLOTS} for more information."
                 )
+
 
     @staticmethod
     def _get_active_loop_ignored_intents(

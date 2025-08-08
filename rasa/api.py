@@ -66,6 +66,7 @@ def train(
     domain: "Text",
     config: "Text",
     training_files: "Union[Text, List[Text]]",
+    goals_data_paths: "Union[Text, List[Text]]",
     output: "Text" = rasa.shared.constants.DEFAULT_MODELS_PATH,
     dry_run: bool = False,
     force_training: bool = False,
@@ -82,6 +83,7 @@ def train(
         domain: Path to the domain file.
         config: Path to the config for Core and NLU.
         training_files: Paths to the training data for Core and NLU.
+        goals_data_paths: Paths to the goal data for LLM driven NLU.
         output: Output path.
         dry_run: If `True` then no training will be done, and the information about
             whether the training needs to be done will be printed.
@@ -106,6 +108,7 @@ def train(
         domain=domain,
         config=config,
         training_files=training_files,
+        goals_data_paths=goals_data_paths,
         output=output,
         dry_run=dry_run,
         force_training=force_training,

@@ -32,6 +32,7 @@ from rasa.engine.recipes.recipe import Recipe
 from rasa.engine.storage.resource import Resource
 from rasa.graph_components.converters.nlu_message_converter import NLUMessageConverter
 from rasa.graph_components.providers.domain_provider import DomainProvider
+from rasa.graph_components.providers.goals_provider import GoalsProvider
 from rasa.graph_components.providers.forms_provider import FormsProvider
 from rasa.graph_components.providers.responses_provider import ResponsesProvider
 from rasa.graph_components.providers.domain_for_core_training_provider import (
@@ -240,6 +241,9 @@ class DefaultV1Recipe(Recipe):
         from rasa.graph_components.validators.finetuning_validator import (
             FinetuningValidator,
         )
+        from rasa.graph_components.validators.llm_extension_validator import (
+            LLMExtensionValidator,
+        )
 
         train_config = copy.deepcopy(config)
 
@@ -259,6 +263,14 @@ class DefaultV1Recipe(Recipe):
                 fn="validate",
                 is_input=True,
                 config={"validate_core": self._use_core, "validate_nlu": self._use_nlu},
+            ),
+            "llm_extension_validator": SchemaNode(
+                needs={"importer": PLACEHOLDER_IMPORTER},  # TODO: Find out which importer
+                uses=LLMExtensionValidator,
+                constructor_name="create",
+                fn="validate",
+                config={},
+                is_input=True,
             ),
         }
 
@@ -594,6 +606,15 @@ class DefaultV1Recipe(Recipe):
                 for param in ["debug_plots", "augmentation_factor"]
                 if param in cli_parameters
             },
+        )
+        train_nodes["goals_provider"] = SchemaNode(
+            needs={"importer": "llm_extension_validator"},
+            uses=GoalsProvider,
+            constructor_name="create",
+            fn="provide",
+            config={},
+            is_target=True,
+            is_input=True,
         )
 
         policy_with_end_to_end_support_used = False

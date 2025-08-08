@@ -105,6 +105,7 @@ logger = logging.getLogger(__name__)
 PATHS = {
     "stories": "data/stories.yml",
     "nlu": "data/nlu.yml",
+    "goals": "data/goals.yml",
     "backup": "data/nlu_interactive.yml",
     "domain": "domain.yml",
 }

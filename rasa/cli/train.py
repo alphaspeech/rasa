@@ -17,6 +17,7 @@ from rasa.shared.constants import (
     CONFIG_MANDATORY_KEYS,
     DEFAULT_DOMAIN_PATH,
     DEFAULT_DATA_PATH,
+    DEFAULT_GOALS_PATH,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,17 +83,24 @@ def run_training(args: argparse.Namespace, can_exit: bool = False) -> Optional[T
     )
     config = rasa.cli.utils.get_validated_config(args.config, CONFIG_MANDATORY_KEYS)
 
+    goals = [
+        rasa.cli.utils.get_validated_path(
+            f, "goals", DEFAULT_GOALS_PATH, none_is_valid=True
+        )
+        for f in args.goals
+    ]
+
     training_files = [
         rasa.cli.utils.get_validated_path(
             f, "data", DEFAULT_DATA_PATH, none_is_valid=True
         )
         for f in args.data
     ]
-
+    logging.info(args)
     if not args.skip_validation:
         logger.info("Started validating domain and training data...")
         importer = TrainingDataImporter.load_from_config(
-            domain_path=args.domain, training_data_paths=args.data, config_path=config
+            domain_path=args.domain, training_data_paths=args.data, config_path=config, goals_data_paths=args.goals,
         )
         rasa.cli.utils.validate_files(
             args.fail_on_validation_warnings, args.validation_max_history, importer
@@ -102,6 +110,7 @@ def run_training(args: argparse.Namespace, can_exit: bool = False) -> Optional[T
         domain=domain,
         config=config,
         training_files=training_files,
+        goals_data_paths = goals,
         output=args.out,
         dry_run=args.dry_run,
         force_training=args.force,

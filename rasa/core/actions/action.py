@@ -87,6 +87,7 @@ from rasa.utils.endpoints import EndpointConfig, ClientResponseError
 
 if TYPE_CHECKING:
     from rasa.core.nlg import NaturalLanguageGenerator
+    from rasa.core.nlg import NaturalLanguageSummarizer
     from rasa.core.channels.channel import OutputChannel
     from rasa.shared.core.events import IntentPrediction
 
@@ -334,6 +335,39 @@ class ActionBotResponse(Action):
         """Returns action name."""
         return self.utter_action
 
+class ActionSummarizedBotResponse(Action):
+    def __init__(self, utterances: List[BotUttered]) -> None:
+        """Creates action.
+
+        Args:
+            action_text: Text of end-to-end bot response.
+        """
+        self.utterances = utterances
+
+    def name(self) -> Text:
+        """Returns action name."""
+        # In case of an end-to-end action there is no label (aka name) for the action.
+        # We fake a name by returning the text which the bot sends back to the user.
+        return "action_summarized_response"
+
+    async def run(
+        self,
+        output_channel: "OutputChannel",
+        summarizer: "NaturalLanguageSummarizer",
+        tracker: "DialogueStateTracker",
+        domain: "Domain",
+        metadata: Optional[Dict[Text, Any]] = None,
+    ) -> List[Event]:
+        """Runs action (see parent class for full docstring)."""
+        summarized_bot_response = await summarizer.generate(
+            self.utterances,
+            tracker,
+            output_channel.name(),
+            domain_responses=domain,
+        )
+
+        message = {"text": summarized_bot_response}
+        return [create_bot_utterance(message)]
 
 class ActionEndToEndResponse(Action):
     """Action to utter end-to-end responses to the user."""

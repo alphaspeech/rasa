@@ -105,7 +105,7 @@ class TrainingData:
             "lookup_tables": [
                 self._load_lookup_table(table) for table in self.lookup_tables
             ],
-            "responses": self.responses,
+            "responses": self.responses
         }
         return rasa.shared.utils.io.deep_container_fingerprint(relevant_attributes)
 
@@ -120,7 +120,7 @@ class TrainingData:
             "entities": sorted(self.entities),
             "entity_groups": sorted(self.entity_groups),
             "entity_roles": sorted(self.entity_roles),
-            "actions": sorted(self.action_names),
+            "actions": sorted(self.action_names)
         }
         return rasa.shared.utils.io.deep_container_fingerprint(labels)
 

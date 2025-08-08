@@ -1,0 +1,22 @@
+allowempty: True
+mapping:
+  version:
+    type: "str"
+    required: False
+    allowempty: False
+  goals:
+    type: "map"
+    required: False
+    mapping:
+      regex;([A-Za-z]+):
+        type: "map"
+        mapping:
+          description:
+            type: "str"
+            required: False
+          steps:
+            type: "seq"
+            sequence:
+              - type: any
+            required: True
+            allowempty: False

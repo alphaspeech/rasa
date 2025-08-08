@@ -45,7 +45,7 @@ from rasa.shared.core.constants import (
     PREVIOUS_ACTION,
     ACTIVE_LOOP,
     ACTION_SESSION_START_NAME,
-    FOLLOWUP_ACTION,
+    FOLLOWUP_ACTION, ACTIVE_GOAL,
 )
 from rasa.shared.core.conversation import Dialogue
 from rasa.shared.core.events import (
@@ -80,6 +80,15 @@ class TrackerActiveLoop:
     is_interrupted: bool
     rejected: bool
     trigger_message: Optional[Dict]
+
+@dataclasses.dataclass
+class TrackerActiveGoal:
+    """Dataclass for `DialogueStateTracker.active_goal`."""
+
+    name: Optional[Text]
+    is_interrupted: bool
+    trigger_message: Optional[Dict]
+    description: Text
 
 
 logger = logging.getLogger(__name__)
@@ -222,10 +231,13 @@ class DialogueStateTracker:
         self.latest_bot_utterance: Optional[BotUttered] = None
         self._reset()
         self.active_loop: Optional[TrackerActiveLoop] = None
+        self.active_goal: Optional[TrackerActiveGoal] = None
 
         # Optional model_id to add to all events.
         self.model_id: Optional[Text] = None
         self.assistant_id: Optional[Text] = None
+
+        self.predicted_next_actions = None
 
     ###
     # Public tracker interface
@@ -252,9 +264,37 @@ class DialogueStateTracker:
             ACTIVE_LOOP: (
                 dataclasses.asdict(self.active_loop) if self.active_loop else {}
             ),
+            ACTIVE_GOAL: (
+                dataclasses.asdict(self.active_goal) if self.active_goal else {}
+            ),
             "latest_action": self.latest_action,
             "latest_action_name": self.latest_action_name,
         }
+
+    def remember_predictions(self, predicted_next_actions: List[str]):
+        """
+        If a component already predicted the next actions, the tracker can store this information
+        for later use.
+        """
+        self.predicted_next_actions = deque(predicted_next_actions)
+
+    def reset_predicted_next_actions(self):
+        self.predicted_next_actions = None
+
+    def recall_next_prediction(self) -> str:
+        """
+        If a component already predicted the next actions, the tracker can store this information
+        for later use.
+        """
+        if self.predicted_next_actions is None:
+            return None
+
+        if not self.predicted_next_actions:
+            raise TypeError
+
+        next_prediction = self.predicted_next_actions.popleft()
+
+        return next_prediction
 
     def _events_for_verbosity(
         self, event_verbosity: EventVerbosity
@@ -374,6 +414,34 @@ class DialogueStateTracker:
         ):
             # reset loop rejection if it was predicted again
             self.active_loop.rejected = False
+
+        if self.active_goal is not None and self.active_goal_name:
+            # reset form validation if some loop is active
+            self.active_goal.is_interrupted = False
+
+    def change_goal_to(self, goal_name: Optional[Text]) -> None:
+        """Set the currently active goal.
+
+        Args:
+            loop_name: The name of loop which should be marked as active.
+        """
+        if goal_name is not None:
+            self.active_goal = TrackerActiveGoal(
+                goal_name,
+                False,
+                self.latest_message.parse_data if self.latest_message else None,
+            )
+        else:
+            self.active_goal = None
+
+    def interrupt_goal(self, is_interrupted: bool) -> None:
+        """Interrupt goal and mark that we entered an unhappy path in the conversation.
+
+        Args:
+            is_interrupted: `True` if the goal was run after an unhappy path.
+        """
+        if self.active_goal is not None:
+            self.active_goal.is_interrupted = is_interrupted
 
     def current_slot_values(self) -> Dict[Text, Any]:
         """Return the currently set values of the slots."""
@@ -865,6 +933,17 @@ class DialogueStateTracker:
             return None
 
         return self.active_loop.name
+
+    @property
+    def active_goal_name(self) -> Optional[Text]:
+        """Get the name of the currently active goal.
+
+        Returns: `None` if no active goal or the name of the currently active goal.
+        """
+        if not self.active_goal or self.active_goal.name == SHOULD_NOT_BE_SET:
+            return None
+
+        return self.active_goal.name
 
     @property
     def latest_action_name(self) -> Optional[Text]:

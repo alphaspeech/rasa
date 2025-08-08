@@ -44,6 +44,7 @@ from rasa.shared.core.constants import (
     MAPPING_TYPE,
     MAPPING_CONDITIONS,
     ACTIVE_LOOP,
+    ACTIVE_GOAL,
 )
 from rasa.shared.exceptions import (
     RasaException,
@@ -87,6 +88,7 @@ KEY_ENTITIES = "entities"
 KEY_RESPONSES = "responses"
 KEY_ACTIONS = "actions"
 KEY_FORMS = "forms"
+KEY_GOALS = "goals"
 KEY_E2E_ACTIONS = "e2e_actions"
 KEY_RESPONSES_TEXT = "text"
 
@@ -1257,6 +1259,24 @@ class Domain:
             return {}
 
     @staticmethod
+    def _get_active_goal_sub_state(
+        tracker: "DialogueStateTracker",
+    ) -> Dict[Text, Optional[Text]]:
+        """Turn tracker's active goal into a state name.
+
+        Args:
+            tracker: dialog state tracker containing the dialog so far
+        Returns:
+            a dictionary mapping "name" to active goal name if present
+        """
+        # we don't use tracker.active_loop_name
+        # because we need to keep should_not_be_set
+        if tracker.active_goal:
+            return {rasa.shared.core.constants.GOAL_NAME: tracker.active_goal.name}
+        else:
+            return {}
+
+    @staticmethod
     def _clean_state(state: State) -> State:
         return {
             state_type: sub_state
@@ -1287,6 +1307,9 @@ class Domain:
             rasa.shared.core.constants.ACTIVE_LOOP: self._get_active_loop_sub_state(
                 tracker
             ),
+            rasa.shared.core.constants.ACTIVE_GOAL: self._get_active_goal_sub_state(
+                tracker
+            ),
         }
         return self._clean_state(state)
 
@@ -1303,6 +1326,9 @@ class Domain:
         rule_only_loops = rule_only_data.get(
             rasa.shared.core.constants.RULE_ONLY_LOOPS, []
         )
+        rule_only_goals = rule_only_data.get(
+            rasa.shared.core.constants.RULE_ONLY_GOALS, []
+        )
 
         # remove slots which only occur in rules but not in stories
         if rule_only_slots:
@@ -1317,6 +1343,16 @@ class Domain:
             in rule_only_loops
         ):
             del state[rasa.shared.core.constants.ACTIVE_LOOP]
+
+        # remove active loop which only occur in rules but not in stories
+        if (
+                rule_only_goals
+                and state.get(rasa.shared.core.constants.ACTIVE_GOAL, {}).get(
+            rasa.shared.core.constants.GOAL_NAME
+        )
+                in rule_only_goals
+        ):
+            del state[rasa.shared.core.constants.ACTIVE_GOAL]
 
     @staticmethod
     def _substitute_rule_only_user_input(state: State, last_ml_state: State) -> None:
@@ -1410,9 +1446,9 @@ class Domain:
 
                 for mapping in slot.mappings:
                     mapping_conditions = mapping.get(MAPPING_CONDITIONS)
-                    if mapping[MAPPING_TYPE] != str(SlotMappingType.FROM_ENTITY) or (
-                        mapping_conditions
-                        and mapping_conditions[0].get(ACTIVE_LOOP) is not None
+                    if (mapping[MAPPING_TYPE] != str(SlotMappingType.FROM_ENTITY) or
+                        (mapping_conditions and mapping_conditions[0].get(ACTIVE_LOOP) is not None) or
+                        (mapping_conditions and mapping_conditions[0].get(ACTIVE_GOAL) is not None)
                     ):
                         continue
 
@@ -1928,6 +1964,7 @@ def warn_about_duplicates_found_during_domain_merging(
     for key in [
         KEY_INTENTS,
         KEY_FORMS,
+        KEY_GOALS,
         KEY_ACTIONS,
         KEY_E2E_ACTIONS,
         KEY_RESPONSES,

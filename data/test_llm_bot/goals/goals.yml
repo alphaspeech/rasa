@@ -1,0 +1,32 @@
+
+
+goals:
+  pattern_chitchat:
+    description: Use this goal if the others dont apply and there is not yet a clear goal.
+    steps:
+      - action: utter_free_chitchat_response
+  book_appointment:
+    description: The user wants to book an appointment.
+    steps:
+      - collect: name/first
+        description: first name of the user
+      - collect: name/last
+        description: last name of the user
+      - collect: appointment_type
+        description: the purpose of the appointment
+      - collect: date
+        description: the date the user wishes to book the appointment on
+      - collect: time
+        description: the time the user wishes to book the appointment at
+      - action: utter_appointment_complete
+  cancel_appointment:
+    description: The user wants to cancel their appointment.
+    steps:
+      - collect: name/first
+        description: first name of the user
+      - collect: name/last
+        description: last name of the user
+      - action: action_find_appointment
+      - collect: cancellation_reason
+        description: The reason for the cancellation
+      - action: utter_confirm_cancellation

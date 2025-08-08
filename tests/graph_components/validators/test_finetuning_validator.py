@@ -11,6 +11,7 @@ from rasa.engine.graph import ExecutionContext, GraphComponent, GraphSchema, Sch
 from rasa.engine.storage.resource import Resource
 from rasa.engine.storage.storage import ModelStorage
 from rasa.graph_components.validators.finetuning_validator import FinetuningValidator
+from rasa.llm_nlu.utils.structures import GoalData
 from rasa.nlu.tokenizers.whitespace_tokenizer import WhitespaceTokenizer
 from rasa.core.policies.rule_policy import RulePolicy
 from rasa.shared.constants import (
@@ -100,6 +101,9 @@ class DummyNLUDataImporter(NluDataImporter):
 
     def get_nlu_data(self, language: Optional[Text] = "en") -> TrainingData:
         return self.training_data
+
+    def get_goals(self) -> GoalData:
+        return GoalData({})
 
 
 class EmptyDataImporter(DummyNLUDataImporter):

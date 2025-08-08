@@ -12,7 +12,7 @@ from rasa.cli.arguments.default_arguments import (
 from rasa.graph_components.providers.training_tracker_provider import (
     TrainingTrackerProvider,
 )
-from rasa.shared.constants import DEFAULT_CONFIG_PATH, DEFAULT_DATA_PATH
+from rasa.shared.constants import DEFAULT_CONFIG_PATH, DEFAULT_DATA_PATH, DEFAULT_GOALS_PATH
 
 USE_LATEST_MODEL_FOR_FINE_TUNING = True
 
@@ -20,6 +20,7 @@ USE_LATEST_MODEL_FOR_FINE_TUNING = True
 def set_train_arguments(parser: argparse.ArgumentParser) -> None:
     """Specifies CLI arguments for `rasa train`."""
     add_data_param(parser)
+    add_goals_param(parser)
     add_config_param(parser)
     add_domain_param(parser)
     add_out_param(parser, help_text="Directory where your models should be stored.")
@@ -94,6 +95,17 @@ def add_data_param(
         default=[DEFAULT_DATA_PATH],
         nargs="+",
         help="Paths to the Core and NLU data files.",
+    )
+
+def add_goals_param(
+    parser: Union[argparse.ArgumentParser, argparse._ActionsContainer]
+) -> None:
+    """Specifies path to goals."""
+    parser.add_argument(
+        "--goals",
+        default=[DEFAULT_GOALS_PATH],
+        nargs="+",
+        help="Paths to the Core and goals data files.",
     )
 
 

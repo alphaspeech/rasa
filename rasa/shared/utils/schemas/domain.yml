@@ -107,6 +107,9 @@ mapping:
                           active_loop:
                             type: "str"
                             nullable: True
+                          active_goal:
+                            type: "str"
+                            nullable: True
                           requested_slot:
                             type: "str"
   forms:

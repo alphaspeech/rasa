@@ -1,3 +1,4 @@
+from rasa.core.policies.llm_policy import LLMPolicy
 from rasa.nlu.classifiers.diet_classifier import DIETClassifier
 from rasa.nlu.classifiers.fallback_classifier import FallbackClassifier
 from rasa.nlu.classifiers.keyword_intent_classifier import KeywordIntentClassifier
@@ -47,6 +48,7 @@ DEFAULT_COMPONENTS = [
     LogisticRegressionClassifier,
     # Response Selectors
     ResponseSelector,
+    LLMPolicy,
     # Message Entity Extractors
     CRFEntityExtractor,
     DucklingEntityExtractor,

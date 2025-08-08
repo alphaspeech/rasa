@@ -174,6 +174,7 @@ class AvailableEndpoints:
     def read_endpoints(cls, endpoint_file: Text) -> "AvailableEndpoints":
         """Read the different endpoints from a yaml file."""
         nlg = read_endpoint_config(endpoint_file, endpoint_type="nlg")
+        llm_engine = read_endpoint_config(endpoint_file, endpoint_type="llm_engine")
         nlu = read_endpoint_config(endpoint_file, endpoint_type="nlu")
         action = read_endpoint_config(endpoint_file, endpoint_type="action_endpoint")
         model = read_endpoint_config(endpoint_file, endpoint_type="models")
@@ -185,6 +186,7 @@ class AvailableEndpoints:
 
         return cls(
             nlg,
+            llm_engine,
             nlu,
             action,
             model,
@@ -196,6 +198,7 @@ class AvailableEndpoints:
     def __init__(
         self,
         nlg: Optional[EndpointConfig] = None,
+        llm_engine: Optional[EndpointConfig] = None,
         nlu: Optional[EndpointConfig] = None,
         action: Optional[EndpointConfig] = None,
         model: Optional[EndpointConfig] = None,
@@ -208,6 +211,7 @@ class AvailableEndpoints:
         self.action = action
         self.nlu = nlu
         self.nlg = nlg
+        self.llm_engine = llm_engine
         self.tracker_store = tracker_store
         self.lock_store = lock_store
         self.event_broker = event_broker

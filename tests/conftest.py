@@ -109,6 +109,11 @@ def nlu_data_path() -> Text:
 
 
 @pytest.fixture(scope="session")
+def goals_path() -> Text:
+    return "data/test_llm_bot/goals/goals.yml"
+
+
+@pytest.fixture(scope="session")
 def config_path() -> Text:
     return "rasa/engine/recipes/config_files/default_config.yml"
 

@@ -39,6 +39,7 @@ KEY_REGEX_EXAMPLES = "examples"
 KEY_LOOKUP = "lookup"
 KEY_LOOKUP_EXAMPLES = "examples"
 KEY_METADATA = "metadata"
+KEY_GOALS = "goals"
 
 MULTILINE_TRAINING_EXAMPLE_LEADING_SYMBOL = "-"
 
@@ -57,6 +58,7 @@ class RasaYAMLReader(TrainingDataReader):
         self.regex_features: List[Dict[Text, Text]] = []
         self.lookup_tables: List[Dict[Text, Any]] = []
         self.responses: Dict[Text, List[Dict[Text, Any]]] = {}
+        self.goals: Dict[Text, Dict[Text, Any]] = {}
 
     def validate(self, string: Text) -> None:
         """Check if the string adheres to the NLU yaml data schema.
@@ -401,6 +403,7 @@ class RasaYAMLWriter(TrainingDataWriter):
         nlu_items.extend(cls.process_synonyms(training_data))
         nlu_items.extend(cls.process_regexes(training_data))
         nlu_items.extend(cls.process_lookup_tables(training_data))
+        nlu_items.extend(cls.process_goals(training_data))
 
         if not any([nlu_items, training_data.responses]):
             return None
@@ -423,6 +426,17 @@ class RasaYAMLWriter(TrainingDataWriter):
     @classmethod
     def process_intents(cls, training_data: "TrainingData") -> List[OrderedDict]:
         """Serializes the intents."""
+        return RasaYAMLWriter.process_training_examples_by_key(
+            cls.prepare_training_examples(training_data),
+            KEY_INTENT,
+            KEY_INTENT_EXAMPLES,
+            TrainingDataWriter.generate_message,
+        )
+
+    @classmethod
+    def process_goals(cls, training_data: "TrainingData") -> List[OrderedDict]:
+        """Serializes the goals."""
+        # TODO: implement this properly
         return RasaYAMLWriter.process_training_examples_by_key(
             cls.prepare_training_examples(training_data),
             KEY_INTENT,

@@ -148,6 +148,19 @@ def is_nlu_file(file_path: Text) -> bool:
 
     return nlu_loading.guess_format(file_path) != nlu_loading.UNK
 
+def is_goals_file(file_path: Text) -> bool:
+    """Checks if a file is a Rasa compatible goals file.
+
+    Args:
+        file_path: Path of the file which should be checked.
+
+    Returns:
+        `True` if it's a goals file, otherwise `False`.
+    """
+    from rasa.shared.nlu.training_data import loading as goals_loading
+
+    return goals_loading.guess_format(file_path) != goals_loading.UNK
+
 
 def is_config_file(file_path: Text) -> bool:
     """Checks whether the given file path is a Rasa config file.

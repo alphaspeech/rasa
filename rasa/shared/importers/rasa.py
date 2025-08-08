@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Text, Union
 import rasa.shared.data
 import rasa.shared.utils.common
 import rasa.shared.utils.io
+from rasa.llm_nlu.utils.structures import GoalData
 from rasa.shared.core.training_data.structures import StoryGraph
 from rasa.shared.importers import utils
 from rasa.shared.importers.importer import TrainingDataImporter
@@ -25,6 +26,7 @@ class RasaFileImporter(TrainingDataImporter):
         config_file: Optional[Text] = None,
         domain_path: Optional[Text] = None,
         training_data_paths: Optional[Union[List[Text], Text]] = None,
+        goals_data_paths: Optional[Union[List[Text], Text]] = None,
     ):
 
         self._domain_path = domain_path
@@ -70,6 +72,11 @@ class RasaFileImporter(TrainingDataImporter):
     def get_nlu_data(self, language: Optional[Text] = "en") -> TrainingData:
         """Retrieves NLU training data (see parent class for full docstring)."""
         return utils.training_data_from_paths(self._nlu_files, language)
+
+    def get_goals(self) -> GoalData:
+        """Retrieves NLU training data (see parent class for full docstring)."""
+        logging.warning("Initialized empty goal data. If goal data was provided, ensure the ExtendedRasaFileImporter is used instead.")
+        return GoalData({})
 
     def get_domain(self) -> Domain:
         """Retrieves model domain (see parent class for full docstring)."""

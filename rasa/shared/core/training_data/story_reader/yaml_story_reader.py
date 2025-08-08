@@ -9,7 +9,7 @@ import re
 from re import Match, Pattern
 from typing import Dict, Text, List, Any, Optional, Union, Tuple
 
-from rasa.shared.core.domain import Domain
+from rasa.shared.core.domain import Domain, KEY_GOALS
 import rasa.shared.data
 from rasa.shared.core.slots import TextSlot, ListSlot
 from rasa.shared.exceptions import YamlException
@@ -181,6 +181,25 @@ class YAMLStoryReader(StoryReader):
         return rasa.shared.data.is_likely_yaml_file(
             file_path
         ) and rasa.shared.utils.io.is_key_in_yaml(file_path, KEY_STORIES, KEY_RULES)
+
+    @classmethod
+    def is_goals_file(cls, file_path: Union[Text, Path]) -> bool:
+        """Check if file contains Core training data or rule data in YAML format.
+
+        Args:
+            file_path: Path of the file to check.
+
+        Returns:
+            `True` in case the file is a Core YAML training data or rule data file,
+            `False` otherwise.
+
+        Raises:
+            YamlException: if the file seems to be a YAML file (extension) but
+                can not be read / parsed.
+        """
+        return rasa.shared.data.is_likely_yaml_file(
+            file_path
+        ) and rasa.shared.utils.io.is_key_in_yaml(file_path, KEY_GOALS)
 
     @classmethod
     def _has_test_prefix(cls, file_path: Text) -> bool:

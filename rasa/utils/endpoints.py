@@ -30,7 +30,9 @@ def read_endpoint_config(
         if content.get(endpoint_type) is None:
             return None
 
-        return EndpointConfig.from_dict(content[endpoint_type])
+        data = content[endpoint_type]
+        data["type"] = endpoint_type
+        return EndpointConfig.from_dict(data)
     except FileNotFoundError:
         logger.error(
             "Failed to read endpoint configuration "

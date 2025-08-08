@@ -49,6 +49,10 @@ MEMOIZATION_POLICY_PRIORITY = UNLIKELY_INTENT_POLICY_PRIORITY + 1
 # rule execution takes precedence over training stories or predicted actions.
 RULE_POLICY_PRIORITY = MEMOIZATION_POLICY_PRIORITY + 1
 
+# LLM Selector Priority overtakes rule policy provider, because we assume, that
+# if we care to include it despite the increased delay, it's because its necessairy.
+LLM_POLICY_PRIORITY = RULE_POLICY_PRIORITY + 1
+
 DIALOGUE = "dialogue"
 
 # RabbitMQ message property header added to events published using `rasa export`

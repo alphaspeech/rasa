@@ -21,6 +21,7 @@ DEFAULT_INTENTS = [
 ]
 
 LOOP_NAME = "name"
+GOAL_NAME = "name"
 
 ACTION_LISTEN_NAME = "action_listen"
 ACTION_RESTART_NAME = "action_restart"
@@ -64,6 +65,7 @@ SHOULD_NOT_BE_SET = "should_not_be_set"
 
 PREVIOUS_ACTION = "prev_action"
 ACTIVE_LOOP = "active_loop"
+ACTIVE_GOAL = "active_goal"
 LOOP_INTERRUPTED = "is_interrupted"
 LOOP_REJECTED = "rejected"
 TRIGGER_MESSAGE = "trigger_message"
@@ -106,6 +108,7 @@ class SlotMappingType(Enum):
     FROM_INTENT = "from_intent"
     FROM_TRIGGER_INTENT = "from_trigger_intent"
     FROM_TEXT = "from_text"
+    FROM_LLM = "from_llm"
     CUSTOM = "custom"
 
     def __str__(self) -> str:
@@ -130,6 +133,7 @@ ENTITY_LABEL_SEPARATOR = "#"
 
 RULE_ONLY_SLOTS = "rule_only_slots"
 RULE_ONLY_LOOPS = "rule_only_loops"
+RULE_ONLY_GOALS = "rule_only_goals"
 
 # if you add more policy/classifier names, make sure to add a test as well to ensure
 # that the name and the class stay in sync
