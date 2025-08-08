@@ -178,6 +178,7 @@ class MessageProcessor:
         await self.save_tracker(tracker)
 
         if isinstance(message.output_channel, CollectingOutputChannel):
+            logging.info(message.output_channel.messages)
             return message.output_channel.messages
 
         return None
@@ -861,9 +862,13 @@ class MessageProcessor:
 
         # action loop. predicts actions until we hit action listen
         while should_predict_another_action and self._should_handle_message(tracker):
+            logging.info("PREDICTION LOOP --------------------- A before")
+            logging.info(output_channel.messages)
             # this actually just calls the policy's method by the same name
             try:
                 action, prediction = self.predict_next_with_tracker_if_should(tracker)
+                logging.info("PREDICTION LOOP --------------------- B prediction")
+                logging.info(output_channel.messages)
             except ActionLimitReached:
                 logger.warning(
                     "Circuit breaker tripped. Stopped predicting "
@@ -880,10 +885,14 @@ class MessageProcessor:
                     f"execution of the default action '{ACTION_EXTRACT_SLOTS}'."
                 )
                 tracker = await self.run_action_extract_slots(output_channel, tracker)
+                logging.info("PREDICTION LOOP --------------------- C")
+                logging.info(output_channel.messages)
 
             should_predict_another_action = await self._run_action(
                 action, tracker, output_channel, self.nlg, prediction
             )
+            logging.info("PREDICTION LOOP --------------------- D")
+            logging.info(output_channel.messages)
 
     async def _summarize_bot_utteranced(self, message: UserMessage, tracker: DialogueStateTracker) -> None:
         """
@@ -919,6 +928,11 @@ class MessageProcessor:
             # replace with summarized BotUttered event
             for summary_event in summary_events:
                 tracker.update(summary_event, self.domain)
+
+
+            # apply to output channel
+            message.output_channel.messages = []
+            await message.output_channel.send_response(tracker.sender_id, summary_event.message())
 
     @staticmethod
     def should_predict_another_action(action_name: Text) -> bool:
