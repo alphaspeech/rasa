@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
+from rasa.llm_nlu.utils.send_request import create_slot_extraction_model
 from rasa.shared.constants import (
     DEFAULT_SESSION_EXPIRATION_TIME_IN_MINUTES,
     DEFAULT_CARRY_OVER_SLOTS_TO_NEW_SESSION,
@@ -247,6 +248,7 @@ class Domain:
         if domain_slots:
             rasa.shared.core.slot_mappings.validate_slot_mappings(domain_slots)
         slots = cls.collect_slots(domain_slots)
+        LLMSlotExtraction = create_slot_extraction_model(slots)
         domain_actions = data.get(KEY_ACTIONS, [])
         actions = cls._collect_action_names(domain_actions)
 

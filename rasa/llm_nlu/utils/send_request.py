@@ -1,5 +1,6 @@
 import json
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
+from pydantic import BaseModel, create_model
 import requests
 
 from rasa.shared.core.events import ActionExecuted, BotUttered, UserUttered
@@ -63,3 +64,19 @@ def get_simplified_history(tracker: DialogueStateTracker, remember_latest: int) 
             })
 
     return list(reversed(conversation_history))
+
+
+def create_slot_extraction_model(slots):
+    fields = {}
+
+    def get_type(slot_type):
+        if slot_type == "text":
+            return Optional[str], None
+        return Optional[Any], None
+
+    for slot_name, slot_config in slots.items():
+        mappings = slot_config.get("mappings", [])
+        if any(m.get("type") == "from_llm" for m in mappings):
+            fields[slot_name] = get_type(slot_config.get("type", "text"))
+
+    return create_model("LLMSlotExtraction", **fields, __base__=BaseModel)
