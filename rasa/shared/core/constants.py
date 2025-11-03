@@ -108,7 +108,6 @@ class SlotMappingType(Enum):
     FROM_INTENT = "from_intent"
     FROM_TRIGGER_INTENT = "from_trigger_intent"
     FROM_TEXT = "from_text"
-    FROM_LLM = "from_llm"
     CUSTOM = "custom"
 
     def __str__(self) -> str:
