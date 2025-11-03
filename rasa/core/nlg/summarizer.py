@@ -21,6 +21,7 @@ class NaturalLanguageSummarizer(NaturalLanguageGenerator):
     def __init__(self, endpoint_config: EndpointConfig) -> None:
 
         self.nlg_endpoint = endpoint_config
+        self.summarize = True
 
     def _clean_utter_action(self, utter_action: BotUttered):
         clean_dict = {
