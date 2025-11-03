@@ -59,7 +59,6 @@ class SlotMapping:
             SlotMappingType.FROM_INTENT: ["value"],
             SlotMappingType.FROM_TRIGGER_INTENT: ["value"],
             SlotMappingType.FROM_TEXT: [],
-            SlotMappingType.FROM_LLM: [],
             SlotMappingType.CUSTOM: [],
         }
 
