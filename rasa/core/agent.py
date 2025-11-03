@@ -211,7 +211,7 @@ async def load_agent(
     tracker_store = None
     lock_store = None
     generator = None
-    summarizer = None
+    llm_engine = None
     action_endpoint = None
     http_interpreter = None
 
@@ -227,11 +227,11 @@ async def load_agent(
         if endpoints.nlu:
             http_interpreter = RasaNLUHttpInterpreter(endpoints.nlu)
         if endpoints.llm_engine and endpoints.llm_engine.kwargs.get("summarize_responses", False):
-            summarizer = endpoints.llm_engine
+            llm_engine = endpoints.llm_engine
 
     agent = Agent(
         generator=generator,
-        summarizer=summarizer,
+        llm_engine=llm_engine,
         tracker_store=tracker_store,
         lock_store=lock_store,
         action_endpoint=action_endpoint,
@@ -292,7 +292,7 @@ class Agent:
         self,
         domain: Optional[Domain] = None,
         generator: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
-        summarizer: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
+        llm_engine: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
         tracker_store: Optional[TrackerStore] = None,
         lock_store: Optional[LockStore] = None,
         action_endpoint: Optional[EndpointConfig] = None,
@@ -306,7 +306,11 @@ class Agent:
         self.processor: Optional[MessageProcessor] = None
 
         self.nlg = NaturalLanguageGenerator.create(generator, self.domain)
-        self.summarizer = NaturalLanguageGenerator.create(summarizer, self.domain)
+        self.summarizer = (
+            NaturalLanguageGenerator.create(llm_engine, self.domain)
+            if llm_engine is not None
+            else None
+        )
         self.tracker_store = self._create_tracker_store(tracker_store, self.domain)
         self.lock_store = self._create_lock_store(lock_store)
         self.action_endpoint = action_endpoint
