@@ -46,6 +46,7 @@ def _create_from_endpoint_config(
 ) -> "NaturalLanguageGenerator":
     """Given an endpoint configuration, create a proper NLG object."""
     domain = domain or Domain.empty()
+    summarize = False
 
     logging.info(endpoint_config)
     if endpoint_config:
@@ -69,8 +70,10 @@ def _create_from_endpoint_config(
         nlg = TemplatedNaturalLanguageGenerator(domain.responses)
     elif endpoint_config.type.lower() == "llm_engine":
         from rasa.core.nlg import NaturalLanguageSummarizer
+        summarize = endpoint_config.params.get("summarize_responses", False)
 
         nlg = NaturalLanguageSummarizer(endpoint_config)
+        nlg.summarize = summarize
     else:
         nlg = _load_from_module_name_in_endpoint_config(endpoint_config, domain)
 
