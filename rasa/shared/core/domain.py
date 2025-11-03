@@ -248,7 +248,6 @@ class Domain:
         if domain_slots:
             rasa.shared.core.slot_mappings.validate_slot_mappings(domain_slots)
         slots = cls.collect_slots(domain_slots)
-        LLMSlotExtraction = create_slot_extraction_model(slots)
         domain_actions = data.get(KEY_ACTIONS, [])
         actions = cls._collect_action_names(domain_actions)
 
@@ -810,6 +809,8 @@ class Domain:
         self._add_default_slots()
         self.store_entities_as_slots = store_entities_as_slots
         self._check_domain_sanity()
+
+        self.LLMSlotExtraction = create_slot_extraction_model(slots)
 
     def __deepcopy__(self, memo: Optional[Dict[int, Any]]) -> "Domain":
         """Enables making a deep copy of the `Domain` using `copy.deepcopy`.
@@ -1440,6 +1441,7 @@ class Domain:
         Returns:
             A list of `SlotSet` events.
         """
+        logger.info("###### REACHED THE SLOT FOR ENTITIES FUNCTION")
         if self.store_entities_as_slots:
             slot_events = []
 
@@ -1470,7 +1472,7 @@ class Domain:
                         slot_events.append(SlotSet(slot.name, matching_entities))
                     else:
                         slot_events.append(SlotSet(slot.name, matching_entities[-1]))
-
+            logger.info(slot_events)
             return slot_events
         else:
             return []
