@@ -1,4 +1,5 @@
 from rasa.core.policies.llm_policy import LLMPolicy
+from rasa.llm_nlu.extractors.basic_llm_extractor import LLMEntityExtractor
 from rasa.nlu.classifiers.diet_classifier import DIETClassifier
 from rasa.nlu.classifiers.fallback_classifier import FallbackClassifier
 from rasa.nlu.classifiers.keyword_intent_classifier import KeywordIntentClassifier
@@ -56,6 +57,7 @@ DEFAULT_COMPONENTS = [
     MitieEntityExtractor,
     SpacyEntityExtractor,
     RegexEntityExtractor,
+    LLMEntityExtractor,
     # Message Feauturizers
     LexicalSyntacticFeaturizer,
     ConveRTFeaturizer,
