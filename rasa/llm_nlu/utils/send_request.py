@@ -4,18 +4,18 @@ from pydantic import BaseModel, create_model
 import requests
 
 from rasa.shared.core.events import ActionExecuted, BotUttered, UserUttered
-from rasa.shared.core.trackers import DialogueStateTracker
+#from rasa.shared.core.trackers import DialogueStateTracker # This import causes error during training
 
 # TODO: load url, model, temperature from config
 url = "https://llm.dev.alphaspeech.de/api/chat"
 
-def send_request(prompt: str, format: dict[str, Any] = None):
+def send_request(prompt: str, format: dict[str, Any] = None, model: str = "qwen2.5:14b"):
     headers = {
         "Content-Type": "application/json"
     }
 
     data = {
-        "model": "qwen2.5:14b",  # "cyberwald/sauerkrautlm-nemo-12b-instruct",
+        "model": model,  # "cyberwald/sauerkrautlm-nemo-12b-instruct",
         "stream": False,
         "temperature": 0
     }
@@ -38,9 +38,10 @@ def send_request(prompt: str, format: dict[str, Any] = None):
 def fill_prompt_template(template: str, **params) -> str:
     return template.format(**params)
 
-def get_simplified_history(tracker: DialogueStateTracker, remember_latest: int) -> List[Dict]:
+def get_simplified_history(tracker, remember_latest: int) -> List[Dict]:
     """
     Returns a simplified conversation history to use for prompting.
+    tracker = DialogueStateTracker
     """
     conversation_history = []
 
@@ -69,14 +70,18 @@ def get_simplified_history(tracker: DialogueStateTracker, remember_latest: int) 
 def create_slot_extraction_model(slots):
     fields = {}
 
-    def get_type(slot_type):
-        if slot_type == "text":
+    def get_type(s_type):
+        if s_type == "text":
             return Optional[str], None
         return Optional[Any], None
 
-    for slot_name, slot_config in slots.items():
-        mappings = slot_config.get("mappings", [])
-        if any(m.get("type") == "from_llm" for m in mappings):
-            fields[slot_name] = get_type(slot_config.get("type", "text"))
+    for slot_object in slots:
+        slot_mappings = slot_object.mappings
+
+        from_entity_mappings = [m for m in slot_mappings if m.get("type") == "from_entity"]
+        for from_entity_m in from_entity_mappings:
+            slot_type = slot_object.type_name
+            entity_name = from_entity_m.get("entity")
+            fields[entity_name] = get_type(slot_type) if slot_type else Optional[str] # TODO: ensure fields works with rasa types
 
     return create_model("LLMSlotExtraction", **fields, __base__=BaseModel)
