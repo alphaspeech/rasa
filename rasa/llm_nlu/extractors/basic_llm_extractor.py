@@ -1,14 +1,14 @@
 from __future__ import annotations
 import logging
-import re
-from typing import Any, Dict, List, Optional, Text
+from typing import Any, Dict, List, Optional, Text, Type
 
 from rasa.engine.graph import GraphComponent, ExecutionContext
 from rasa.engine.recipes.default_recipe import DefaultV1Recipe
 from rasa.engine.storage.storage import ModelStorage
 from rasa.engine.storage.resource import Resource
 import rasa.shared.utils.io
-import rasa.nlu.utils.pattern_utils as pattern_utils
+from rasa.graph_components.providers.domain_provider import DomainProvider
+from rasa.shared.core.domain import Domain
 from rasa.shared.nlu.training_data.training_data import TrainingData
 from rasa.shared.nlu.training_data.message import Message
 from rasa.shared.nlu.constants import (
@@ -25,17 +25,25 @@ from rasa.llm_nlu.utils.send_request import fill_prompt_template, send_request, 
 
 logger = logging.getLogger(__name__)
 
+MODEL = "model"
 
 @DefaultV1Recipe.register(
-    DefaultV1Recipe.ComponentType.ENTITY_EXTRACTOR, is_trainable=True
+    DefaultV1Recipe.ComponentType.ENTITY_EXTRACTOR, is_trainable=False
 )
-class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
+class LLMEntityExtractor(DomainProvider, EntityExtractorMixin):
     """Extracts entities via lookup tables and regexes defined in the training data."""
+
+    @classmethod
+    def required_components(cls) -> List[Type]:
+        """Components that should be included in the pipeline before this component."""
+        return []
 
     @staticmethod
     def get_default_config() -> Dict[Text, Any]:
         """The component's default config (see parent class for full docstring)."""
-        return {}
+        return {
+            MODEL: "qwen2.5:14b",
+        }
 
     @classmethod
     def create(
@@ -64,7 +72,6 @@ class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
         config: Dict[Text, Any],
         model_storage: ModelStorage,
         resource: Resource,
-        patterns: Optional[List[Dict[Text, Text]]] = None,
     ) -> None:
         """Creates a new instance.
 
@@ -80,9 +87,6 @@ class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
         self._config = {**self.get_default_config(), **config}
         self._model_storage = model_storage
         self._resource = resource
-        # extractor
-        self.case_sensitive = self._config["case_sensitive"]
-        self.patterns = patterns or []
 
     def train(self, training_data: TrainingData) -> Resource:
         """Extract patterns from the training data.
@@ -97,11 +101,6 @@ class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
             )
             return self._resource
 
-        entities = training_data.entities
-        training_data.
-
-        self.SlotExtraction = create_slot_extraction_model(slots)
-
         if not self.SlotExtraction:
             rasa.shared.utils.io.raise_warning(
                 "No lookup tables or regexes defined in the training data that have "
@@ -113,7 +112,7 @@ class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
         self.persist()
         return self._resource
 
-    def process(self, messages: List[Message]) -> List[Message]:
+    def process(self, messages: List[Message], domain: Optional[Domain] = None) -> List[Message]:
         """Extracts entities from messages and appends them to the attribute.
 
         If no patterns where found during training, then the given messages will not
@@ -127,18 +126,20 @@ class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
         Returns:
            the given list of messages that have been modified
         """
+        slot_extraction_model = domain.LLMSlotExtraction
 
         for message in messages:
-            extracted_entities = self._extract_entities(message)
+            extracted_entities = self._extract_entities(message, slot_extraction_model)
             extracted_entities = self.add_extractor_name(extracted_entities)
             message.set(
                 ENTITIES,
                 message.get(ENTITIES, []) + extracted_entities,
                 add_to_output=True,
             )
+
         return messages
 
-    def _extract_entities(self, message: Message) -> List[Dict[Text, Any]]:
+    def _extract_entities(self, message: Message, slot_extraction_model) -> List[Dict[Text, Any]]:
         """Extract entities of the given type from the given user message.
 
         Args:
@@ -150,16 +151,20 @@ class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
 
         prompt = fill_prompt_template(
             SLOT_MAPPING_TEMPLATE,
-            goal=self.current_goal,
+            goal=None, # self.current_goal, #TODO: Use current goal for this?
             user_input=message.get(TEXT),
-            slot_state=self.slot_state,
-            conversation_history=self.conversation_history
+            slot_state=slot_extraction_model.model_json_schema(), # self.slot_state, # TODO: Get actual slot state
+            #conversation_history=self.conversation_history # TODO: determine if needed
         )
-        new_slot_state = send_request(prompt, format=self.SlotExtraction.model_json_schema())
+        new_slot_state = send_request(prompt, format=slot_extraction_model.model_json_schema(), model=self._config.get("model"))
         print(f"The new slot state is: {new_slot_state}")
         self.slot_state = new_slot_state
 
-        for key, value in new_slot_state.iterator():
+        start_index = "unknown"
+        end_index = "unknown"
+        for key, value in new_slot_state.items():
+            if value is None:
+                continue
             entities.append(
                 {
                     ENTITY_ATTRIBUTE_TYPE: key,
@@ -181,40 +186,20 @@ class LLMEntityExtractor(GraphComponent, EntityExtractorMixin):
         **kwargs: Any,
     ) -> LLMEntityExtractor:
         """Loads trained component (see parent class for full docstring)."""
-        try:
-            with model_storage.read_from(resource) as model_path:
-                regex_file = model_path / cls.REGEX_FILE_NAME
-                patterns = rasa.shared.utils.io.read_json_file(regex_file)
-                return cls(
-                    config,
-                    model_storage=model_storage,
-                    resource=resource,
-                    patterns=patterns,
-                )
-        except (ValueError, FileNotFoundError):
-            rasa.shared.utils.io.raise_warning(
-                f"Failed to load {cls.__name__} from model storage. "
-                f"This can happen if the model could not be trained because regexes "
-                f"could not be extracted from the given training data - and hence "
-                f"could not be persisted."
-            )
-            return cls(config, model_storage=model_storage, resource=resource)
+        return cls(
+            config,
+            model_storage=model_storage,
+            resource=resource,
+        )
 
     def persist(self) -> None:
         """Persist this model."""
-        if not self.patterns:
-            return
-        with self._model_storage.write_to(self._resource) as model_path:
-            regex_file = model_path / self.REGEX_FILE_NAME
-            rasa.shared.utils.io.dump_obj_as_json_to_file(regex_file, self.patterns)
+        pass
 
 
 SLOT_MAPPING_TEMPLATE = """
     {goal}
     Your job is to update the JSON containing the structured information gathered from the dialogue based on the lastest user input.
-
-    Consider the conversation history. "user" is the user, "bot" is your replies. The conversation history is:
-    {conversation_history}
 
     Here is the current information as a json:
     {slot_state}
@@ -224,3 +209,6 @@ SLOT_MAPPING_TEMPLATE = """
 
     Now update the JSON containing the information based on the lastest user input.
 """
+
+#     Consider the conversation history. "user" is the user, "bot" is your replies. The conversation history is:
+#     {conversation_history}
