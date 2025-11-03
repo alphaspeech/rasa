@@ -7,7 +7,7 @@ from pathlib import Path
 import tarfile
 import time
 from types import LambdaType
-from typing import Any, Dict, List, Optional, Text, Tuple, Union
+from typing import Any, Dict, List, Optional, Text, Tuple, Union, Type
 
 from rasa.core.http_interpreter import RasaNLUHttpInterpreter
 from rasa.engine import loader
@@ -91,7 +91,7 @@ class MessageProcessor:
         tracker_store: rasa.core.tracker_store.TrackerStore,
         lock_store: LockStore,
         generator: NaturalLanguageGenerator,
-        summarizer: NaturalLanguageGenerator = None,
+        summarizer: Optional[Type[NaturalLanguageGenerator]] = None,
         action_endpoint: Optional[EndpointConfig] = None,
         max_number_of_predictions: int = MAX_NUMBER_OF_PREDICTIONS,
         on_circuit_break: Optional[LambdaType] = None,
