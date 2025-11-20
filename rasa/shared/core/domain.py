@@ -91,6 +91,7 @@ KEY_ACTIONS = "actions"
 KEY_FORMS = "forms"
 KEY_GOALS = "goals"
 KEY_E2E_ACTIONS = "e2e_actions"
+KEY_PROMPT = "prompt"
 KEY_RESPONSES_TEXT = "text"
 
 ALL_DOMAIN_KEYS = [
@@ -101,6 +102,7 @@ ALL_DOMAIN_KEYS = [
     KEY_INTENTS,
     KEY_RESPONSES,
     KEY_E2E_ACTIONS,
+    KEY_PROMPT,
     SESSION_CONFIG_KEY,
 ]
 
@@ -250,6 +252,7 @@ class Domain:
         slots = cls.collect_slots(domain_slots)
         domain_actions = data.get(KEY_ACTIONS, [])
         actions = cls._collect_action_names(domain_actions)
+        prompt = data.get(KEY_PROMPT, None)
 
         additional_arguments = {
             **data.get("config", {}),
@@ -272,6 +275,7 @@ class Domain:
             forms=data.get(KEY_FORMS, {}),
             data=Domain._cleaned_data(data),
             action_texts=data.get(KEY_E2E_ACTIONS, []),
+            prompt=prompt,
             session_config=session_config,
             **additional_arguments,
         )
@@ -737,6 +741,7 @@ class Domain:
         forms: Union[Dict[Text, Any], List[Text]],
         data: Dict,
         action_texts: Optional[List[Text]] = None,
+        prompt: Optional[Text] = None,
         store_entities_as_slots: bool = True,
         session_config: SessionConfig = SessionConfig.default(),
         **kwargs: Any,
@@ -782,6 +787,7 @@ class Domain:
             session_config,
         )
 
+        self.prompt = prompt
         self.session_config = session_config
 
         self._custom_actions = action_names
