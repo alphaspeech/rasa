@@ -87,7 +87,7 @@ from rasa.utils.endpoints import EndpointConfig, ClientResponseError
 
 if TYPE_CHECKING:
     from rasa.core.nlg import NaturalLanguageGenerator
-    from rasa.core.nlg import NaturalLanguageSummarizer
+    from rasa.core.nlg import NaturalLanguageRephraser
     from rasa.core.channels.channel import OutputChannel
     from rasa.shared.core.events import IntentPrediction
 
@@ -353,13 +353,13 @@ class ActionSummarizedBotResponse(Action):
     async def run(
         self,
         output_channel: "OutputChannel",
-        summarizer: "NaturalLanguageSummarizer",
+        rephraser: "NaturalLanguageRephraser",
         tracker: "DialogueStateTracker",
         domain: "Domain",
         metadata: Optional[Dict[Text, Any]] = None,
     ) -> List[Event]:
         """Runs action (see parent class for full docstring)."""
-        summarized_bot_response = await summarizer.generate(
+        summarized_bot_response = await rephraser.generate(
             self.utterances,
             tracker,
             output_channel.name(),

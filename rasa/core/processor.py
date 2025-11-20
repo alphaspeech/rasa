@@ -91,7 +91,7 @@ class MessageProcessor:
         tracker_store: rasa.core.tracker_store.TrackerStore,
         lock_store: LockStore,
         generator: NaturalLanguageGenerator,
-        summarizer: Optional[Type[NaturalLanguageGenerator]] = None,
+        rephraser: Optional[Type[NaturalLanguageGenerator]] = None,
         action_endpoint: Optional[EndpointConfig] = None,
         max_number_of_predictions: int = MAX_NUMBER_OF_PREDICTIONS,
         on_circuit_break: Optional[LambdaType] = None,
@@ -99,7 +99,7 @@ class MessageProcessor:
     ) -> None:
         """Initializes a `MessageProcessor`."""
         self.nlg = generator
-        self.summarizer = summarizer
+        self.rephraser = rephraser
         self.tracker_store = tracker_store
         self.lock_store = lock_store
         self.max_number_of_predictions = max_number_of_predictions
@@ -898,7 +898,7 @@ class MessageProcessor:
         """
         Summarized the output utterances using llm to insure cohesive reply.
         """
-        if self.summarizer is None:
+        if self.rephraser is None:
             return
 
         bot_uttered_events = []
@@ -911,7 +911,7 @@ class MessageProcessor:
         if len(bot_uttered_events) >= 0:
             summary_events = await ActionSummarizedBotResponse(bot_uttered_events).run(
                 message.output_channel,
-                self.summarizer,
+                self.rephraser,
                 tracker,
                 self.domain
             )

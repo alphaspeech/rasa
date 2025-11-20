@@ -212,6 +212,7 @@ async def load_agent(
     lock_store = None
     generator = None
     llm_engine = None
+    llm_rephraser = None
     action_endpoint = None
     http_interpreter = None
 
@@ -226,12 +227,15 @@ async def load_agent(
         model_server = endpoints.model if endpoints.model else model_server
         if endpoints.nlu:
             http_interpreter = RasaNLUHttpInterpreter(endpoints.nlu)
-        if endpoints.llm_engine and endpoints.llm_engine.kwargs.get("summarize_responses", False):
+        if endpoints.llm_engine:
             llm_engine = endpoints.llm_engine
+        if endpoints.llm_rephraser:
+            llm_rephraser = endpoints.llm_rephraser
 
     agent = Agent(
         generator=generator,
         llm_engine=llm_engine,
+        llm_rephraser=llm_rephraser,
         tracker_store=tracker_store,
         lock_store=lock_store,
         action_endpoint=action_endpoint,
@@ -293,6 +297,7 @@ class Agent:
         domain: Optional[Domain] = None,
         generator: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
         llm_engine: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
+        llm_rephraser: Union[EndpointConfig, NaturalLanguageGenerator, None] = None,
         tracker_store: Optional[TrackerStore] = None,
         lock_store: Optional[LockStore] = None,
         action_endpoint: Optional[EndpointConfig] = None,
@@ -306,11 +311,12 @@ class Agent:
         self.processor: Optional[MessageProcessor] = None
 
         self.nlg = NaturalLanguageGenerator.create(generator, self.domain)
-        self.summarizer = (
-            NaturalLanguageGenerator.create(llm_engine, self.domain)
-            if llm_engine is not None
+        self.rephraser = (
+            NaturalLanguageGenerator.create(llm_rephraser, self.domain)
+            if llm_rephraser is not None
             else None
         )
+        self.engine = llm_engine # TODO: Current not used nor initialized -> should this be configured in component instead?
         self.tracker_store = self._create_tracker_store(tracker_store, self.domain)
         self.lock_store = self._create_lock_store(lock_store)
         self.action_endpoint = action_endpoint
@@ -359,7 +365,7 @@ class Agent:
             lock_store=self.lock_store,
             action_endpoint=self.action_endpoint,
             generator=self.nlg,
-            summarizer=self.summarizer,
+            rephraser=self.rephraser,
             http_interpreter=self.http_interpreter,
         )
         self.domain = self.processor.domain

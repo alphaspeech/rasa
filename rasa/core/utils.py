@@ -175,6 +175,7 @@ class AvailableEndpoints:
         """Read the different endpoints from a yaml file."""
         nlg = read_endpoint_config(endpoint_file, endpoint_type="nlg")
         llm_engine = read_endpoint_config(endpoint_file, endpoint_type="llm_engine")
+        llm_rephraser = read_endpoint_config(endpoint_file, endpoint_type="llm_rephraser")
         nlu = read_endpoint_config(endpoint_file, endpoint_type="nlu")
         action = read_endpoint_config(endpoint_file, endpoint_type="action_endpoint")
         model = read_endpoint_config(endpoint_file, endpoint_type="models")
@@ -187,6 +188,7 @@ class AvailableEndpoints:
         return cls(
             nlg,
             llm_engine,
+            llm_rephraser,
             nlu,
             action,
             model,
@@ -199,6 +201,7 @@ class AvailableEndpoints:
         self,
         nlg: Optional[EndpointConfig] = None,
         llm_engine: Optional[EndpointConfig] = None,
+        llm_rephraser: Optional[EndpointConfig] = None,
         nlu: Optional[EndpointConfig] = None,
         action: Optional[EndpointConfig] = None,
         model: Optional[EndpointConfig] = None,
@@ -212,6 +215,7 @@ class AvailableEndpoints:
         self.nlu = nlu
         self.nlg = nlg
         self.llm_engine = llm_engine
+        self.llm_rephraser = llm_rephraser
         self.tracker_store = tracker_store
         self.lock_store = lock_store
         self.event_broker = event_broker
