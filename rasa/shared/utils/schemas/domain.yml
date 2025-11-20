@@ -119,6 +119,8 @@ mapping:
       regex;([A-Za-z]+):
         type: "map"
         mapping:
+          description:
+            type: "str"
           required_slots:
             type: "seq"
             sequence:
