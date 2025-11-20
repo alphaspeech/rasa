@@ -1,5 +1,4 @@
-from rasa.core.policies.llm_policy import LLMPolicy
-from rasa.llm_nlu.extractors.basic_llm_extractor import LLMEntityExtractor
+
 from rasa.nlu.classifiers.diet_classifier import DIETClassifier
 from rasa.nlu.classifiers.fallback_classifier import FallbackClassifier
 from rasa.nlu.classifiers.keyword_intent_classifier import KeywordIntentClassifier
@@ -38,6 +37,7 @@ from rasa.core.policies.ted_policy import TEDPolicy
 from rasa.core.policies.memoization import MemoizationPolicy, AugmentedMemoizationPolicy
 from rasa.core.policies.rule_policy import RulePolicy
 from rasa.core.policies.unexpected_intent_policy import UnexpecTEDIntentPolicy
+from rasa.core.policies.llm_policy import LLMPolicy
 
 DEFAULT_COMPONENTS = [
     # Message Classifiers
