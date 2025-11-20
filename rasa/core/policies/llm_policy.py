@@ -1,55 +1,25 @@
 from __future__ import annotations
-import copy
 import logging
 
-from typing import Any, Dict, Optional, Text, Tuple, Union, List, Type
+from typing import Any, Dict, Optional, Text, List, Type
 
 from pydantic import BaseModel
 
 from rasa.core.constants import LLM_POLICY_PRIORITY, POLICY_PRIORITY
 from rasa.core.policies.multi_policy import MultiPolicy
-from rasa.engine.graph import ExecutionContext, GraphComponent
+from rasa.engine.graph import ExecutionContext
 from rasa.engine.recipes.default_recipe import DefaultV1Recipe
 from rasa.engine.storage.resource import Resource
 from rasa.engine.storage.storage import ModelStorage
-from rasa.core.policies.policy import PolicyPrediction, Policy, SupportedData
-from rasa.graph_components.providers.domain_for_core_training_provider import DomainForCoreTrainingProvider
+from rasa.core.policies.policy import PolicyPrediction
 from rasa.graph_components.providers.goals_provider import GoalsProvider
 from rasa.graph_components.providers.responses_provider import ResponsesProvider
 from rasa.llm_nlu.utils.send_request import fill_prompt_template, send_request, get_simplified_history
-from rasa.shared.constants import DIAGNOSTIC_DATA
-import rasa.shared.utils.io
-from rasa.shared.core.constants import ACTIVE_GOAL, DEFAULT_ACTION_NAMES, ACTION_LISTEN_NAME
+from rasa.shared.core.constants import ACTIVE_GOAL, DEFAULT_ACTION_NAMES, ACTION_LISTEN_NAME, ACTIVE_LOOP
 from rasa.shared.core.domain import Domain
-from rasa.shared.core.events import ActionExecuted, UserUttered, BotUttered
 from rasa.shared.core.generator import TrackerWithCachedStates
 from rasa.shared.core.trackers import DialogueStateTracker
-from rasa.shared.nlu.training_data import util
-from rasa.shared.nlu.training_data.message import Message
-from rasa.nlu.classifiers.diet_classifier import (
-    DIETClassifier,
-)
-from rasa.nlu.extractors.extractor import EntityTagSpec
-from rasa.nlu.constants import (
-    RESPONSE_SELECTOR_PROPERTY_NAME,
-    RESPONSE_SELECTOR_RETRIEVAL_INTENTS,
-    RESPONSE_SELECTOR_RESPONSES_KEY,
-    RESPONSE_SELECTOR_PREDICTION_KEY,
-    RESPONSE_SELECTOR_RANKING_KEY,
-    RESPONSE_SELECTOR_UTTER_ACTION_KEY,
-    RESPONSE_SELECTOR_DEFAULT_INTENT,
-    DEFAULT_TRANSFORMER_SIZE,
-)
-from rasa.shared.nlu.constants import (
-    TEXT,
-    INTENT,
-    RESPONSE,
-    INTENT_RESPONSE_KEY,
-    INTENT_NAME_KEY,
-    PREDICTED_CONFIDENCE_KEY,
-)
 
-from rasa.utils.tensorflow.models import RasaModel
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +72,7 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
     ) -> None:
         logging.info("################## INITIALIZED LLMPolicy ###")
         logging.info(kwargs)
-        logging.info(execution_context)
+        logging.info(config)
         # TODO: Consider rules and stories in the future
         # TODO: Consider being outside of a goal too
 
@@ -111,6 +81,7 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
 
         self.responses = None
         self.goals = None
+        #self.language = model_storage.
 
         super().__init__(
             config,
@@ -163,7 +134,8 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
 
         user_input = current_tracker_state["latest_message"]["text"]
         conversation_history = get_simplified_history(tracker, self.config[REMEMBER_LATEST_NUM_KEY])
-
+        active_loop = current_tracker_state[ACTIVE_LOOP]
+        requested_slot = tracker.get_slot("requested_slot")
         active_goal = current_tracker_state[ACTIVE_GOAL]
         if active_goal == {}:
             active_goal = None
@@ -174,6 +146,8 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
         prompt = fill_prompt_template(
             PREDICT_ACTIONS_PROMPT_TEMPLATE,
             goal=active_goal,
+            active_loop=active_loop,
+            requested_slot=requested_slot,
             steps=active_goal,
             user_input=user_input,
             available_actions=self._get_available_actions(domain),
@@ -279,65 +253,67 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
 
 
     def _get_available_actions(self, domain: Domain) -> List[Text]:
-        action_names = domain.action_names_or_texts
-        action_names = [action_name for action_name in action_names if action_name not in DEFAULT_ACTION_NAMES]
+        available_actions = []
+
+        responses = domain.responses
+        forms = domain.forms
+        for response_name, response_data in responses.items():
+            descriptions = [d["metadata"]["description"] for d in response_data if "metadata" in d and "description" in d["metadata"]]
+            available_actions.append({
+                "action_name": response_name,
+                "description": descriptions
+            })
+        # for form_name, form_data in forms.items():
+        #     available_actions.append({
+        #         "action_name": form_name,
+        #         "description": form_data.get("description", None)
+        #     })
+        for action_name in  domain._custom_actions:
+            available_actions.append({
+                "action_name": action_name,
+            })
+
         logging.info("######## available actions: ##########")
-        logging.info(action_names)
-        return action_names
+        logging.info(available_actions)
+        return available_actions
 
 
 
 PREDICT_ACTIONS_PROMPT_TEMPLATE = """
-    {goal}
+    You are part of a conversational AI. Your job is to predict the next actions to take.
 
-    For context, here is the conversation history. 
-    - "user" is the user
-    - "bot" is your replies.
-    {conversation_history}
-    The latest user input was:
-    {user_input}
-
-    Using the conversation history, determine which step to take next. Here are the steps to take to achieve the current goal.
-    Skip steps that are already done or unnecessary considering the conversation history.
-    Only do one step at a time.
-    {steps}
-
-    Once you know which step to take, output a list of actions to perform in order to complete it.
-    Each action shall be referred to by its unique name: the action key.
-    If the step says to collect certain parameter, the matching action key would be utter_ask_<param>. e.g. to collect "name", use the key 'utter_ask_name' to ask the user for their name.
-    But again, skip collect steps if the information to collect is already available.
-
+    Using the conversation history, determine which actions to take next.
+    - Each action shall be referred to by its unique name: the action key.
+    - utter_ask_<param> actions are used to collect information, e.g. use the key 'utter_ask_name' to ask the user for their name.
+    - <name>_form actions should be triggered when the description applies
+    - Skip asking for information, if the info is already available.
+    - There should always be an utter_<name> action included in your output, all other actions are backend actions that give no feedback to the user.
+    - The last action should always be to wait for the next user input.
+    - utter actions that depend on action_<name> actions to run first should be listed after the respective action_<name> action
+    
     Here are the available actions:
     {available_actions}
     
     The available actions are use case specific. Here are actions that are always available and should be picked with lower priority:
     {default_actions}
-
-    For example, if you determined that the step "collect: appointment_type" is the next step, you would make a list of actions to do to collect the appointment type.
-    That would be:
-    - utter_ask_appointment_type
-    - {action_listen_name}
-    You would ignore steps that were already completed and steps that come after.
-
-    Return ONLY the list of action keys needed to complete the step you determined. The last action should always be to wait for the next user input.
-"""
-
-DETERMINE_GOAL_TEMPLATE = """
-    Please help determine whether the current goal of the conversation has changed considering the latest user input.
-
-    The current goal is {goal}.
-
-    The available goals are:
-    {goals}
-
-    The latest user input is:
+    
+    This is the current active form: {active_loop}
+    And that this is the requested slot to determine the value for: {requested_slot}
+    
+    For context, here is the conversation history. 
+    - "user" is the user
+    - "bot" is your replies.
+    {conversation_history}
+    
+    The latest user input was:
     {user_input}
-
-    Now output the current goal of the conversation. If the goal has not changed, output the current goal.
+    
+    Predict a list of actions to take in response to the latest user query, considering the conversation context and the laid out rules.
 """
-
-class GoalExtraction(BaseModel):
-    goal_key: str
 
 class ActionPrediction(BaseModel):
     action_keys: List[str]
+
+
+#  and then the utter_ask action that asks for the frist required slot in the form.
+# - book_appointment_form
