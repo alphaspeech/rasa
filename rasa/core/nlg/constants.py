@@ -2,8 +2,7 @@ DE_KEY = "de"
 EN_KEY = "en"
 
 REPHRASE_PROMPT_EN = """
-    The latest user input was:
-    {user_input}
+    {system_prompt}
 
     Generate a reply to return to the user based on these actions you are supposed to perform next:
     {responses}
@@ -18,8 +17,7 @@ REPHRASE_PROMPT_EN = """
 """
 
 REPHRASE_PROMPT_DE = """
-    Die letzte Nachricht des Nutzers war:
-    {user_input}
+    {system_prompt}
 
     Generiere eine Antwort an den nutzer basierend auf den Aktionen, die als nächstes ausgeführt werden sollen:
     {responses}
