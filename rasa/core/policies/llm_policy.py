@@ -1,7 +1,8 @@
 from __future__ import annotations
 import logging
+from enum import Enum
 
-from typing import Any, Dict, Optional, Text, List, Type
+from typing import Any, Dict, Optional, Text, List, Type, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -12,6 +13,7 @@ from rasa.engine.recipes.default_recipe import DefaultV1Recipe
 from rasa.engine.storage.resource import Resource
 from rasa.engine.storage.storage import ModelStorage
 from rasa.core.policies.policy import PolicyPrediction
+from rasa.graph_components.providers.domain_provider import DomainProvider
 from rasa.graph_components.providers.goals_provider import GoalsProvider
 from rasa.graph_components.providers.responses_provider import ResponsesProvider
 from rasa.llm_nlu.utils.send_request import fill_prompt_template, send_request, get_simplified_history
@@ -22,6 +24,7 @@ from rasa.shared.core.trackers import DialogueStateTracker
 
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 REMEMBER_LATEST_NUM_KEY = "remember_latest_num"
 USE_STORIES_KEY = "use_stories"
@@ -41,7 +44,7 @@ TEXT = "text"
 @DefaultV1Recipe.register(
     DefaultV1Recipe.ComponentType.POLICY_WITH_END_TO_END_SUPPORT, is_trainable=False
 )
-class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
+class LLMPolicy(MultiPolicy, DomainProvider, ResponsesProvider):
     """Response selector using llm to predict next action
     """
 
@@ -81,7 +84,6 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
 
         self.responses = None
         self.goals = None
-        #self.language = model_storage.
 
         super().__init__(
             config,
@@ -91,6 +93,8 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
         )
 
         self.priority = config.get(POLICY_PRIORITY, LLM_POLICY_PRIORITY)
+        self.action_options_format = None
+        self.available_actions = None
 
 
     # def __determine_current_goal(self, user_input):
@@ -129,6 +133,7 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
         rule_only_data: Optional[Dict[Text, Any]] = None,
         **kwargs: Any,
     ) -> List[Text]:
+        self._build_available_actions(domain)
         current_tracker_state = tracker.current_state()
         logging.info(current_tracker_state)
 
@@ -150,15 +155,20 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
             requested_slot=requested_slot,
             steps=active_goal,
             user_input=user_input,
-            available_actions=self._get_available_actions(domain),
+            available_actions=self.available_actions,
             conversation_history=conversation_history,
             default_actions=DEFAULT_ACTION_NAMES,
             action_listen_name=ACTION_LISTEN_NAME,
         )
+        prompt = domain.prompt + prompt
+
         logging.info(prompt)
-        data = send_request(prompt, ActionPrediction.model_json_schema())
+        data = send_request(prompt, self.action_options_format)
 
         next_actions = [action_key for action_key in data.get("action_keys")]
+
+        # TODO: validate actions, make sure no actions are used that dont exist
+
         return next_actions
 
     def predict_action_probabilities(
@@ -252,14 +262,16 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
         return self._resource
 
 
-    def _get_available_actions(self, domain: Domain) -> List[Text]:
-        available_actions = []
+    def _build_available_actions(self, domain: Domain):
+        if self.available_actions is not None and self.action_options_format is not None:
+            return None
+        self.available_actions = []
 
         responses = domain.responses
         forms = domain.forms
         for response_name, response_data in responses.items():
             descriptions = [d["metadata"]["description"] for d in response_data if "metadata" in d and "description" in d["metadata"]]
-            available_actions.append({
+            self.available_actions.append({
                 "action_name": response_name,
                 "description": descriptions
             })
@@ -268,14 +280,20 @@ class LLMPolicy(MultiPolicy, GoalsProvider, ResponsesProvider):
         #         "action_name": form_name,
         #         "description": form_data.get("description", None)
         #     })
-        for action_name in  domain._custom_actions:
-            available_actions.append({
+        for action_name in domain._custom_actions:
+            self.available_actions.append({
                 "action_name": action_name,
             })
 
-        logging.info("######## available actions: ##########")
-        logging.info(available_actions)
-        return available_actions
+        action_names = [v["action_name"] for v in self.available_actions]
+
+        action_names_enum = Enum(
+            "ActionName",
+            {v: v for v in action_names},
+            type=str
+        )
+        self.action_options_format = ActionPrediction.model_json_schema()
+
 
 
 
@@ -284,12 +302,12 @@ PREDICT_ACTIONS_PROMPT_TEMPLATE = """
 
     Using the conversation history, determine which actions to take next.
     - Each action shall be referred to by its unique name: the action key.
-    - utter_ask_<param> actions are used to collect information, e.g. use the key 'utter_ask_name' to ask the user for their name.
     - <name>_form actions should be triggered when the description applies
     - Skip asking for information, if the info is already available.
     - There should always be an utter_<name> action included in your output, all other actions are backend actions that give no feedback to the user.
     - The last action should always be to wait for the next user input.
     - utter actions that depend on action_<name> actions to run first should be listed after the respective action_<name> action
+    - action_<name> actions run first, then utter_<name> actions and lastly, action_listen
     
     Here are the available actions:
     {available_actions}
@@ -308,7 +326,7 @@ PREDICT_ACTIONS_PROMPT_TEMPLATE = """
     The latest user input was:
     {user_input}
     
-    Predict a list of actions to take in response to the latest user query, considering the conversation context and the laid out rules.
+    Predict a list of actions to take in response to the latest user query, considering the conversation context and the laid out rules. Only choose from the actions listen in this prompt.
 """
 
 class ActionPrediction(BaseModel):
