@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 MODEL = "model"
 
 @DefaultV1Recipe.register(
-    DefaultV1Recipe.ComponentType.ENTITY_EXTRACTOR, is_trainable=False
+    DefaultV1Recipe.ComponentType.ENTITY_EXTRACTOR, is_trainable=True
 )
 class LLMEntityExtractor(DomainProvider, EntityExtractorMixin):
     """Extracts entities via lookup tables and regexes defined in the training data."""
@@ -151,13 +151,12 @@ class LLMEntityExtractor(DomainProvider, EntityExtractorMixin):
 
         prompt = fill_prompt_template(
             SLOT_MAPPING_TEMPLATE,
-            goal=None, # self.current_goal, #TODO: Use current goal for this?
             user_input=message.get(TEXT),
             slot_state=slot_extraction_model.model_json_schema(), # self.slot_state, # TODO: Get actual slot state
             #conversation_history=self.conversation_history # TODO: determine if needed
         )
         new_slot_state = send_request(prompt, format=slot_extraction_model.model_json_schema(), model=self._config.get("model"))
-        print(f"The new slot state is: {new_slot_state}")
+        logger.info(f"The new slot state is: {new_slot_state}")
         self.slot_state = new_slot_state
 
         start_index = "unknown"
@@ -173,7 +172,7 @@ class LLMEntityExtractor(DomainProvider, EntityExtractorMixin):
                     ENTITY_ATTRIBUTE_VALUE: value
                 }
             )
-
+        logger.info(f"Predicted entities: {entities}")
         return entities
 
     @classmethod
@@ -198,8 +197,10 @@ class LLMEntityExtractor(DomainProvider, EntityExtractorMixin):
 
 
 SLOT_MAPPING_TEMPLATE = """
-    {goal}
     Your job is to update the JSON containing the structured information gathered from the dialogue based on the lastest user input.
+    If the information could be directly found in the user query, set the certainty metric to 1.0.
+    If you had to use your best judgement to set the slot, set a value between 0.0 and 1.0 for the certainty metric. Assume that anything below 0.7 means asking further would make sense.
+    Do not change certainty values for information that isn't the topic of the current user query.
 
     Here is the current information as a json:
     {slot_state}
