@@ -55,6 +55,9 @@ mapping:
         type: "map"
         allowempty: True
         mapping:
+          judgement_certainty:
+            type: "number"
+            required: False
           influence_conversation:
             type: "bool"
             required: False
