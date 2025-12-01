@@ -48,7 +48,7 @@ class NaturalLanguageRephraser(NaturalLanguageGenerator):
             "text": utter_action.text,
             DESCRIPTION_KEY: utter_action.metadata.get("metadata", {}).get(DESCRIPTION_KEY, None),
             REPHRASE_KEY: utter_action.metadata.get("metadata", {}).get(REPHRASE_KEY, False),
-            REPHRASE_PROMPT_KEY: utter_action.metadata.get("metadata", {}).get(REPHRASE_PROMPT_KEY, None),
+            REPHRASE_PROMPT_KEY: utter_action.metadata.get("metadata", {}).get(REPHRASE_PROMPT_KEY, ""),
         }
 
         clean_dict[REPHRASE_PROMPT_KEY] = clean_dict[REPHRASE_PROMPT_KEY].format(**tracker.current_slot_values())
