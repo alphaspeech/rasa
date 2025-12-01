@@ -32,6 +32,7 @@ class Slot(ABC):
         self,
         name: Text,
         mappings: List[Dict[Text, Any]],
+        judgement_certainty: Optional[int] = None,
         initial_value: Any = None,
         value_reset_delay: Optional[int] = None,
         influence_conversation: bool = True,
@@ -53,6 +54,7 @@ class Slot(ABC):
         self.initial_value = initial_value
         self._value_reset_delay = value_reset_delay
         self.influence_conversation = influence_conversation
+        self.judgement_certainty = judgement_certainty
         self._has_been_set = False
 
     def feature_dimensionality(self) -> int:
@@ -151,6 +153,7 @@ class Slot(ABC):
         return {
             "type": rasa.shared.utils.common.module_path_from_instance(self),
             "initial_value": self.initial_value,
+            "judgement_certainty": self.judgement_certainty,
             "influence_conversation": self.influence_conversation,
             "mappings": self.mappings,
         }
@@ -175,6 +178,7 @@ class FloatSlot(Slot):
         self,
         name: Text,
         mappings: List[Dict[Text, Any]],
+        judgement_certainty: Optional[int] = None,
         initial_value: Optional[float] = None,
         value_reset_delay: Optional[int] = None,
         max_value: float = 1.0,
@@ -188,7 +192,7 @@ class FloatSlot(Slot):
             UserWarning, if initial_value is outside the min-max range.
         """
         super().__init__(
-            name, mappings, initial_value, value_reset_delay, influence_conversation
+            name, mappings, judgement_certainty, initial_value, value_reset_delay, influence_conversation
         )
         self.max_value = max_value
         self.min_value = min_value
@@ -310,6 +314,7 @@ class CategoricalSlot(Slot):
         self,
         name: Text,
         mappings: List[Dict[Text, Any]],
+        judgement_certainty: Optional[int] = None,
         values: Optional[List[Any]] = None,
         initial_value: Any = None,
         value_reset_delay: Optional[int] = None,
@@ -317,7 +322,7 @@ class CategoricalSlot(Slot):
     ) -> None:
         """Creates a `Categorical  Slot` (see parent class for detailed docstring)."""
         super().__init__(
-            name, mappings, initial_value, value_reset_delay, influence_conversation
+            name, mappings, judgement_certainty, initial_value, value_reset_delay, influence_conversation
         )
         if values and None in values:
             rasa.shared.utils.io.raise_warning(
@@ -410,6 +415,7 @@ class AnySlot(Slot):
         self,
         name: Text,
         mappings: List[Dict[Text, Any]],
+        judgement_certainty: Optional[int] = None,
         initial_value: Any = None,
         value_reset_delay: Optional[int] = None,
         influence_conversation: bool = False,
@@ -429,7 +435,7 @@ class AnySlot(Slot):
             )
 
         super().__init__(
-            name, mappings, initial_value, value_reset_delay, influence_conversation
+            name, mappings, judgement_certainty, initial_value, value_reset_delay, influence_conversation
         )
 
     def __eq__(self, other: Any) -> bool:
