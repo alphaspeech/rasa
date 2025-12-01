@@ -70,7 +70,7 @@ def _create_from_endpoint_config(
         nlg = TemplatedNaturalLanguageGenerator(domain.responses)
     elif endpoint_config.type.lower() == "llm_rephraser":
         from rasa.core.nlg import NaturalLanguageRephraser
-        nlg = NaturalLanguageRephraser(endpoint_config)
+        nlg = NaturalLanguageRephraser(endpoint_config, domain)
     else:
         nlg = _load_from_module_name_in_endpoint_config(endpoint_config, domain)
 
